@@ -1,9 +1,16 @@
 package otfc
 
-// Represents an index record. The offset points to the actual config data in the data block
+import (
+	"log"
+)
+
+// Represents an index record. The offset
 type indexRecord struct {
-	key     [16]byte //md5 hash of the config key
-	offset  uint32
-	status  byte
-	padding [3]byte
+	key    [16]byte //md5 hash of the config key
+	offset uint32
+	length uint32
+}
+
+func (rec indexRecord) print() {
+	log.Printf("[%x : %x : %d]\n", rec.key, rec.offset, rec.length)
 }

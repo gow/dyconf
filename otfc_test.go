@@ -21,3 +21,11 @@ func ExampleOTCF() {
 	//Output:
 	//Num Records:  0
 }
+
+func Example2_OTCF() {
+	var config *OTFC
+	config.Init()
+	fmt.Println("Num Records: ", config.NumRecords())
+	//Output:
+	//Num Records: 
+}
