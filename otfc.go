@@ -1,7 +1,7 @@
 package otfc
 
 import (
-	"crypto/md5"
+	//"crypto/md5"
 	"log"
 	//"fmt"
 	"errors"
@@ -18,13 +18,15 @@ const (
 
 type Config struct {
 	header configHeader
-	index  [INDEX_SIZE]indexRecord
+	index  indexBlock
 	data   [DATA_BLOCK_SIZE]byte
 }
 
 type OTFC struct {
 	configPtr *Config
 }
+
+var configPtr *Config
 
 // Returns the count of the config records. If the given OTFC is not initialized, an error is returned.
 func (otfc *OTFC) NumRecords() (count uint32, err error) {
@@ -40,29 +42,34 @@ func (otfc *OTFC) NumRecords() (count uint32, err error) {
 }
 
 // Initializes the config.
-func (otfc *OTFC) Init() (err error) {
-	log.Printf("%#p\n", otfc.configPtr)
+func Init(fileName string) (err error) {
+	//log.Printf("%#p\n", otfc.configPtr)
 	size := int32(24 /* header size */ + (24 * INDEX_SIZE) /* 24 bytes X 1023 index records */ + DATA_BLOCK_SIZE /* Size of the config data block */)
 	log.Printf("Size: %#d\n", size)
-	mapFileFD, err := createFile(CONFIG_FILE, size)
+	//mapFileFD, err := createFile(fileName, size)
+	mapFile, err := os.Open(fileName)
 	if err != nil {
 		return
 	}
 	// mmap the config file.
-	mmap, err := syscall.Mmap(int(mapFileFD.Fd()), 0, int(size), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+	mmap, err := syscall.Mmap(int(mapFile.Fd()), 0, int(size), syscall.PROT_READ, syscall.MAP_SHARED)
 	if err != nil {
-		log.Fatal(err)
+		mapFile.Close()
+		log.Printf("%s\n", err)
+		return
 	}
-	// Make mmap gave us sufficient memory.
+	// Make sure mmap gave us enough memory.
 	if len(mmap) < int(size) {
 		err = errors.New("Insufficient memmory")
+		mapFile.Close()
 		return
 	}
 	// Convert the byte array to Config struct type.
-	otfc.configPtr = (*Config)(unsafe.Pointer(&mmap[0]))
+	configPtr = (*Config)(unsafe.Pointer(&mmap[0]))
 	return
 }
 
+/*
 func createFile(fileName string, size int32) (file *os.File, err error) {
 	file, err = os.Create(fileName)
 	if err != nil {
@@ -82,6 +89,7 @@ func createFile(fileName string, size int32) (file *os.File, err error) {
 	return
 }
 
+*/
 func (otfc *OTFC) Get(key string) (value []byte, err error) {
 	// TODO implement get.
 	/*
@@ -97,6 +105,7 @@ func (otfc *OTFC) Get(key string) (value []byte, err error) {
 	return
 }
 
+/*
 // Sets the given config key and value pair.
 func (otfc *OTFC) Set(key string, value []byte) (err error) {
 	count, _ := otfc.NumRecords()
@@ -123,8 +132,10 @@ func (otfc *OTFC) PrintHeader() {
 	otfc.configPtr.header.print()
 }
 
-func (otfc *OTFC) PrintIndexBlock() {
-	for _, x := range otfc.configPtr.index {
-		x.print()
-	}
+*/
+func PrintIndexBlock() {
+	configPtr.index.print()
+	//for _, x := range otfc.configPtr.index {
+	//x.print()
+	//}
 }
