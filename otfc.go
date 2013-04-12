@@ -105,29 +105,17 @@ func (otfc *OTFC) Get(key string) (value []byte, err error) {
 	return
 }
 
-/*
 // Sets the given config key and value pair.
-func (otfc *OTFC) Set(key string, value []byte) (err error) {
+func Set(key string, value []byte) (err error) {
 	count, _ := otfc.NumRecords()
-	var rec indexRecord
-
-	// md5(key)
-	h := md5.New()
-	h.Write([]byte(key))
-	keyHash := h.Sum(nil)
-
-	// Create new index record.
-	copyLen := copy(rec.key[:], keyHash)
-	log.Println("Copy len: ", copyLen)
-	rec.offset = otfc.configPtr.header.writeOffset
-	rec.length = uint32(len(value))
-	otfc.configPtr.index[count] = rec
-
+  indexPtr := &(configPtr.index)
+  indexPtr.set(key, configPtr.header.writeOffset, uint32(len(value)), count)
 	otfc.configPtr.header.writeOffset = rec.offset + rec.length
 	otfc.configPtr.header.SetRecordCount(count + 1)
 	return
 }
 
+/*
 func (otfc *OTFC) PrintHeader() {
 	otfc.configPtr.header.print()
 }

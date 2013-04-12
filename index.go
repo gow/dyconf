@@ -1,6 +1,7 @@
 package otfc
 
 import (
+  "crypto/md5"
 	"log"
 )
 
@@ -27,4 +28,21 @@ func (iBlock *indexBlock) print() {
 	for _, x := range iBlock.indices {
 		x.print()
 	}
+}
+
+func (iBlock *indexBlock) set(key string, uint32 offset, uint32 length, int pos) (error err) {
+  // md5(key)
+  h := md5.New()
+  h.Write([]byte(key))
+  keyHash := h.Sum(nil)
+
+  // Create new index record.
+/*
+  copyLen := copy(rec.key[:], keyHash)
+  log.Println("Copy len: ", copyLen)
+  rec.offset = offset
+  rec.length = uint32(len(value))
+  otfc.configPtr.index[count] = rec
+*/
+  iBlock[pos] = indexRecord{key: keyHash, offset: offset, legth: length}
 }
