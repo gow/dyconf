@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const (
+	CONFIG_HEADER_SIZE = 32
+)
+
 type configHeader struct {
 	version      uint16
 	lock         uint16
@@ -12,6 +16,7 @@ type configHeader struct {
 	modifiedTime int64
 	numRecords   uint32
 	writeOffset  uint32
+	padding      [8]byte
 }
 
 func (h *configHeader) Version() uint16 {
@@ -26,8 +31,8 @@ func (h *configHeader) ByteSize() uint32 {
 	return h.totalSize
 }
 
-func (h *configHeader) ModifiedTime() int64 {
-	return h.modifiedTime
+func (h *configHeader) ModifiedTime() time.Time {
+	return time.Unix(h.modifiedTime, 0)
 }
 
 func (h *configHeader) NumRecords() uint32 {
@@ -47,7 +52,7 @@ func (h configHeader) print() {
 	fmt.Printf("version : %d\n", h.version)
 	fmt.Printf("lock : %d\n", h.lock)
 	fmt.Printf("totalSize: %d\n", h.totalSize)
-	fmt.Printf("modifiedTime : %d\n", h.modifiedTime)
+	fmt.Printf("modifiedTime : %v\n", h.ModifiedTime())
 	fmt.Printf("numRecords : %d\n", h.numRecords)
-	fmt.Printf("writeOffset: %x\n", h.writeOffset)
+	fmt.Printf("writeOffset: %d\n", h.writeOffset)
 }
