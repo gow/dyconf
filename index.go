@@ -13,6 +13,12 @@ const (
 	INDEX_METADATA_SIZE = 32
 )
 
+const (
+	INDEX_REC_STATUS_INACTIVE = 0x0
+	INDEX_REC_STATUS_ACTIVE   = 0x1
+	INDEX_REC_STATUS_DELETED  = 0x2
+)
+
 type indexMetaData struct {
 	count   uint32
 	padding [28]byte
@@ -56,6 +62,7 @@ func (iBlock *indexBlock) set(
 	rec.key = keyHash
 	rec.dataOffset = offset
 	rec.dataLength = length
+	rec.status = INDEX_REC_STATUS_ACTIVE
 
 	iBlock.count++
 	return nil
@@ -63,16 +70,27 @@ func (iBlock *indexBlock) set(
 
 func (iBlock *indexBlock) get(
 	key string) (offset uint32, length uint32, err error) {
+	indexRec, err := iBlock.find(key)
+	if err != nil {
+		return
+	}
+	if indexRec.status != INDEX_REC_STATUS_ACTIVE {
+		err = fmt.Errorf("key [%s] is not active. Current status: [%x]", key, indexRec.status)
+		return
+	}
+	return indexRec.dataOffset, indexRec.dataLength, nil
+}
 
+func (iBlock *indexBlock) find(key string) (indexRec indexRecord, err error) {
 	inputKeyHash := getKeyHash(key)
 	for i := uint32(0); i < iBlock.count; i++ {
-		indexRec := &(iBlock.indices[i])
-		if indexRec.key == inputKeyHash {
-			return indexRec.dataOffset, indexRec.dataLength, nil
+		indexRecPtr := &(iBlock.indices[i])
+		if indexRecPtr.key == inputKeyHash {
+			return *indexRecPtr, nil
 		}
 	}
-	err = fmt.Errorf("Key [%s] not found", key)
-	return 0, 0, err
+	err = fmt.Errorf("key [%s] not found", key)
+	return
 }
 
 func getKeyHash(key string) (ret [16]byte) {

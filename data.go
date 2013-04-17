@@ -4,6 +4,7 @@ import (
 	"fmt"
 )
 
+// TODO Implement a smarter management for the data block to avoid fragmentation.
 const (
 	DATA_BLOCK_SIZE = 256 * 1024 // 256k bytes
 )

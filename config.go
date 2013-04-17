@@ -1,6 +1,7 @@
 package otfc
 
 import (
+	"fmt"
 	"log"
 )
 
@@ -20,6 +21,11 @@ type Config struct {
 
 // Sets the given config key and value pair.
 func (configPtr *Config) set(key string, value []byte) (err error) {
+	// Check if the key already exists
+	if _, err := configPtr.get(key); err == nil {
+		return fmt.Errorf("key [%s] already exists. Use overwrite(%s) to overwrite it", key, key)
+	}
+
 	count := configPtr.header.NumRecords()
 	dataLength := uint32(len(value))
 	indexPtr := &(configPtr.index)
