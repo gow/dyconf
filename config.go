@@ -8,22 +8,21 @@ import (
 const (
 	CONFIG_VERSION   = 1
 	CONFIG_FILE_SIZE = 294912
-	//DATA_BLOCK_SIZE          = 256 * 1024 // 256k bytes
-	DEFAULT_CONFIG_FILE_NAME = "/tmp/71ebdf319f2a7fa1d4eb45f9c4b7cf64"
 )
 
 type Config struct {
 	header configHeader
 	index  indexBlock
-	//data   [DATA_BLOCK_SIZE]byte
-	data dataBlock
+	data   dataBlock
 }
 
 // Sets the given config key and value pair.
 func (configPtr *Config) set(key string, value []byte) (err error) {
 	// Check if the key already exists
 	if _, err := configPtr.get(key); err == nil {
-		return fmt.Errorf("key [%s] already exists. Use overwrite(%s) to overwrite it", key, key)
+		return ConfigError{
+			ERR_CONFIG_SET_EXISTING_KEY,
+			fmt.Sprintf("key [%s]", key)}
 	}
 
 	count := configPtr.header.NumRecords()
@@ -32,7 +31,6 @@ func (configPtr *Config) set(key string, value []byte) (err error) {
 	indexPtr.set(key, configPtr.header.writeOffset, dataLength)
 
 	// Copy the data
-	//bytesCopied := copy(configPtr.data[configPtr.header.writeOffset:], value)
 	newOffset, err := configPtr.data.set(configPtr.header.writeOffset, value)
 	if err != nil {
 		return

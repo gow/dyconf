@@ -81,16 +81,15 @@ func (iBlock *indexBlock) get(
 	return indexRec.dataOffset, indexRec.dataLength, nil
 }
 
-func (iBlock *indexBlock) find(key string) (indexRec indexRecord, err error) {
+func (iBlock *indexBlock) find(key string) (*indexRecord, error) {
 	inputKeyHash := getKeyHash(key)
 	for i := uint32(0); i < iBlock.count; i++ {
 		indexRecPtr := &(iBlock.indices[i])
 		if indexRecPtr.key == inputKeyHash {
-			return *indexRecPtr, nil
+			return indexRecPtr, nil
 		}
 	}
-	err = fmt.Errorf("key [%s] not found", key)
-	return
+	return nil, ConfigError{ERR_INDEX_KEY_NOT_FOUND, fmt.Sprintf("key [%s]", key)}
 }
 
 func getKeyHash(key string) (ret [16]byte) {

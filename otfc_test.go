@@ -95,7 +95,7 @@ func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
 
 		if err != nil {
 			Print()
-			t.Errorf("Expected no errors; but received [%s]", err)
+			t.Errorf("Expected no errors; but received [%v]", err)
 			return
 		}
 		if !bytes.Equal(retrivedValue, val) {
@@ -120,6 +120,9 @@ func TestOTFCEmptyGet(t *testing.T) {
 		t.Errorf("Expected error; but none received")
 		return
 	}
+	if err != nil && !expectedConfigError(t, ERR_INDEX_KEY_NOT_FOUND, err) {
+		return
+	}
 	if retrivedValue != nil {
 		t.Errorf("Value received for non-existant key. key: [%s], value [%x]",
 			testKey,
@@ -140,8 +143,12 @@ func TestOTFCDoubleSets(t *testing.T) {
 		t.Errorf("Expected no errors; but received [%s]", err)
 		return
 	}
-	if err := Set(testKey, randomValue2); err == nil {
+	err := Set(testKey, randomValue2)
+	if err == nil {
 		t.Errorf("Expected error; but none received")
+		return
+	}
+	if err != nil && !expectedConfigError(t, ERR_CONFIG_SET_EXISTING_KEY, err) {
 		return
 	}
 }
@@ -164,6 +171,16 @@ func Example2_OTCF() {
 */
 
 /////////// Helper functions /////////////
+func expectedConfigError(t *testing.T, errNo int, err error) bool {
+	if configError, ok := err.(ConfigError); ok {
+		if configError.ErrNo() == errNo {
+			return true
+		}
+	}
+	t.Errorf("Expected error [%s]; received [%s]", ConfigError{errNo, ""}, err)
+	return false
+}
+
 func getTempFileName() string {
 	return "/tmp/otfc_test_" + getRandomString(8)
 }
