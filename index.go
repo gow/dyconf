@@ -54,6 +54,11 @@ func (iBlock *indexBlock) set(
 	offset uint32,
 	length uint32) (err error) {
 
+	log.Printf("Index size: %d\n", iBlock.count)
+	if iBlock.count >= MAX_INDEX_RECORDS {
+		log.Println("Setting error")
+		return ConfigError{ERR_INDEX_FULL, fmt.Sprintf("key [%s]", key)}
+	}
 	// TODO: Check for key existance and overwrite.
 	// Add the new index record at the end.
 	rec := &(iBlock.indices[iBlock.count])

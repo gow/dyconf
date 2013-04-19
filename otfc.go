@@ -49,7 +49,7 @@ func Init(fileName string) (err error) {
 func Print() {
 	log.Println("\n==================================================\n")
 	PrintHeaderBlock()
-	PrintIndexBlock()
+	//PrintIndexBlock()
 	log.Println("\n==================================================\n")
 }
 
@@ -85,7 +85,7 @@ func Set(key string, value []byte) error {
 }
 
 func Get(key string) ([]byte, error) {
-	val, _ := configPtr.get(key)
-	log.Printf("Value from config.get(%s): [%s]", key, val)
+	//val, _ := configPtr.get(key)
+	//log.Printf("Value from config.get(%s): [%s]", key, val)
 	return configPtr.get(key)
 }

@@ -17,7 +17,7 @@ func (e ConfigError) Error() string {
 	errString := "Unknown Error"
 	switch e.errNo {
 	case ERR_INDEX_FULL:
-		errString = "index block max capacity reached"
+		errString = "index block has reached max capacity"
 	case ERR_INDEX_KEY_NOT_FOUND:
 		errString = "index key not found"
 	case ERR_CONFIG_SET_EXISTING_KEY:

@@ -118,16 +118,15 @@ func TestOTFCEmptyGet(t *testing.T) {
 	retrivedValue, err := Get(testKey)
 	if err == nil {
 		t.Errorf("Expected error; but none received")
-		return
-	}
-	if err != nil && !expectedConfigError(t, ERR_INDEX_KEY_NOT_FOUND, err) {
-		return
+	} else {
+		expectConfigError(t, ERR_INDEX_KEY_NOT_FOUND, err)
 	}
 	if retrivedValue != nil {
 		t.Errorf("Value received for non-existant key. key: [%s], value [%x]",
 			testKey,
 			retrivedValue)
 	}
+	return
 }
 
 // Tests double sets of the same key.
@@ -145,11 +144,54 @@ func TestOTFCDoubleSets(t *testing.T) {
 	}
 	err := Set(testKey, randomValue2)
 	if err == nil {
-		t.Errorf("Expected error; but none received")
-		return
+		t.Errorf("Expected an error; but none received")
+	} else {
+		expectConfigError(t, ERR_CONFIG_SET_EXISTING_KEY, err)
 	}
-	if err != nil && !expectedConfigError(t, ERR_CONFIG_SET_EXISTING_KEY, err) {
-		return
+	return
+}
+
+// Test Max index capacity
+func TestOTFCMaxIndexCapacity(t *testing.T) {
+	MAX_KEY_SIZE := 128 //chars
+	MAX_VALUE_SIZE := 5 //bytes. Keeping it small to avoid filling the data block.
+	confFile := getTempFileName()
+	defer os.Remove(confFile)
+
+	rand.Seed(32) //Let the generated {key, values} be deterministic
+
+	inputMap := map[string][]byte{}
+	// Fille the config.
+	for len(inputMap) < MAX_INDEX_RECORDS-1 {
+		key := getRandomLengthString(MAX_KEY_SIZE)
+		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
+		if _, ok := inputMap[key]; ok {
+			continue
+		}
+		inputMap[key] = val
+		if err := Set(key, val); err != nil {
+			Print()
+			t.Errorf("Expected no errors; but received [%s]", err)
+			return
+		}
+	}
+
+	log.Printf("Config should contain %d elements", len(inputMap))
+	overflowAttempts := 5
+	for overflowAttempts > 0 {
+		key := getRandomLengthString(MAX_KEY_SIZE)
+		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
+		if _, ok := inputMap[key]; ok {
+			continue
+		}
+
+		overflowAttempts--
+		err := Set(key, val)
+		if err == nil {
+			t.Errorf("Expected error; but none received")
+		} else {
+			expectConfigError(t, ERR_INDEX_FULL, err)
+		}
 	}
 }
 
@@ -171,7 +213,7 @@ func Example2_OTCF() {
 */
 
 /////////// Helper functions /////////////
-func expectedConfigError(t *testing.T, errNo int, err error) bool {
+func expectConfigError(t *testing.T, errNo int, err error) bool {
 	if configError, ok := err.(ConfigError); ok {
 		if configError.ErrNo() == errNo {
 			return true

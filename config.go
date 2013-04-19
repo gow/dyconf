@@ -2,7 +2,7 @@ package otfc
 
 import (
 	"fmt"
-	"log"
+	//"log"
 )
 
 const (
@@ -28,18 +28,24 @@ func (configPtr *Config) set(key string, value []byte) (err error) {
 	count := configPtr.header.NumRecords()
 	dataLength := uint32(len(value))
 	indexPtr := &(configPtr.index)
-	indexPtr.set(key, configPtr.header.writeOffset, dataLength)
+	err = indexPtr.set(key, configPtr.header.writeOffset, dataLength)
+	if err != nil {
+		return
+	}
 
 	// Copy the data
 	newOffset, err := configPtr.data.set(configPtr.header.writeOffset, value)
 	if err != nil {
 		return
 	}
-	log.Printf("Data copied. new Offset: [%d]\n", newOffset)
+	if newOffset == 0 {
+		return ConfigError{}
+	}
+	//log.Printf("Data copied. new Offset: [%d]\n", newOffset)
 
-	log.Println("WriteOffset: ", configPtr.header.writeOffset)
+	//log.Println("WriteOffset: ", configPtr.header.writeOffset)
 	configPtr.header.writeOffset = configPtr.header.writeOffset + dataLength
-	log.Println("WriteOffset: ", configPtr.header.writeOffset)
+	//log.Println("WriteOffset: ", configPtr.header.writeOffset)
 	configPtr.header.SetRecordCount(count + 1)
 	return nil
 }
