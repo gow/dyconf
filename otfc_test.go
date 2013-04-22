@@ -3,9 +3,9 @@ package otfc
 import (
 	"os"
 	//"fmt"
-	//"time"
 	"bytes"
 	"testing"
+	"time"
 	"unsafe"
 	//"crypto/md5"
 	"log"
@@ -13,7 +13,6 @@ import (
 )
 
 func TestOTFCStructSize(t *testing.T) {
-	//expectedSize := uintptr(24 /* header size */ + (24 * INDEX_SIZE) /* 24 bytes X 1023 index records */ + DATA_BLOCK_SIZE /* Size of the config data block */)
 	expectedSize := uint32(CONFIG_FILE_SIZE)
 	config := Config{}
 	actualSize := uint32(unsafe.Sizeof(config))
@@ -51,13 +50,19 @@ func TestOTFCSequentialMultipleSets(t *testing.T) {
 	confFile := getTempFileName()
 	defer os.Remove(confFile)
 
+	seedVal := time.Now().Unix()
+	rand.Seed(seedVal)
 	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
-	log.Printf("Testing multiple sets with %d samples", randomLimit)
+	log.Printf("Testing multiple sets with %d samples (seed: %d)\n", randomLimit, seedVal)
 
 	inputMap := map[string][]byte{}
-	for i := 0; i < randomLimit; i++ {
+	Init(confFile)
+	for len(inputMap) < randomLimit {
 		key := getRandomLengthString(MAX_KEY_SIZE)
 		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
+		if _, ok := inputMap[key]; ok {
+			continue // Key already exists
+		}
 		inputMap[key] = val
 		if err := Set(key, val); err != nil {
 			Print()
@@ -74,14 +79,18 @@ func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
 	confFile := getTempFileName()
 	defer os.Remove(confFile)
 
-	rand.Seed(32) //Let the generated {key, values} be deterministic
-	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
-	log.Printf("Testing multiple sets with %d samples\n", randomLimit)
-
+	seedVal := int64(32) //Let the generated {key, values} be deterministic
+	rand.Seed(seedVal)
+	randomLimit := rand.Intn(MAX_INDEX_RECORDS - 2)
+	log.Printf("Testing multiple sets & gets with %d samples (seed: %d)\n", randomLimit, seedVal)
+	Init(confFile)
 	inputMap := map[string][]byte{}
-	for i := 0; i < randomLimit; i++ {
+	for len(inputMap) < randomLimit {
 		key := getRandomLengthString(MAX_KEY_SIZE)
 		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
+		if _, ok := inputMap[key]; ok {
+			continue // Key already exists
+		}
 		inputMap[key] = val
 		if err := Set(key, val); err != nil {
 			Print()
@@ -89,7 +98,6 @@ func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
 			return
 		}
 	}
-	log.Printf("Done with setting %d keys. Getting keys now...", randomLimit)
 	for key, val := range inputMap {
 		retrivedValue, err := Get(key)
 
@@ -160,9 +168,10 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 
 	rand.Seed(32) //Let the generated {key, values} be deterministic
 
+	Init(confFile)
 	inputMap := map[string][]byte{}
 	// Fille the config.
-	for len(inputMap) < MAX_INDEX_RECORDS-1 {
+	for len(inputMap) < MAX_INDEX_RECORDS {
 		key := getRandomLengthString(MAX_KEY_SIZE)
 		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
 		if _, ok := inputMap[key]; ok {
@@ -176,7 +185,7 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 		}
 	}
 
-	log.Printf("Config should contain %d elements", len(inputMap))
+	//log.Printf("Config should contain %d elements", len(inputMap))
 	overflowAttempts := 5
 	for overflowAttempts > 0 {
 		key := getRandomLengthString(MAX_KEY_SIZE)

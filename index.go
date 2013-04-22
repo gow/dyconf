@@ -44,9 +44,9 @@ func (rec indexRecord) print() {
 
 func (iBlock *indexBlock) print() {
 	log.Printf("Total Index count: [%d]\n", iBlock.count)
-	for i := uint32(0); i < iBlock.count; i++ {
-		iBlock.indices[i].print()
-	}
+	//for i := uint32(0); i < iBlock.count; i++ {
+	//iBlock.indices[i].print()
+	//}
 }
 
 func (iBlock *indexBlock) set(
@@ -54,9 +54,8 @@ func (iBlock *indexBlock) set(
 	offset uint32,
 	length uint32) (err error) {
 
-	log.Printf("Index size: %d\n", iBlock.count)
+	//log.Printf("Index size: %d\n", iBlock.count)
 	if iBlock.count >= MAX_INDEX_RECORDS {
-		log.Println("Setting error")
 		return ConfigError{ERR_INDEX_FULL, fmt.Sprintf("key [%s]", key)}
 	}
 	// TODO: Check for key existance and overwrite.
@@ -80,7 +79,9 @@ func (iBlock *indexBlock) get(
 		return
 	}
 	if indexRec.status != INDEX_REC_STATUS_ACTIVE {
-		err = fmt.Errorf("key [%s] is not active. Current status: [%x]", key, indexRec.status)
+		err = fmt.Errorf("key [%s] is not active. Current status: [%x]",
+			key,
+			indexRec.status)
 		return
 	}
 	return indexRec.dataOffset, indexRec.dataLength, nil

@@ -13,7 +13,7 @@ var configPtr *Config
 
 // Initializes the config.
 func Init(fileName string) (err error) {
-	log.Printf("Config File Size: %#d\n", CONFIG_FILE_SIZE)
+	log.Printf("Config File: %s", fileName)
 	mapFile, err := createFile(fileName, CONFIG_FILE_SIZE)
 	//mapFile, err := os.Open(fileName)
 	if err != nil {
@@ -49,7 +49,7 @@ func Init(fileName string) (err error) {
 func Print() {
 	log.Println("\n==================================================\n")
 	PrintHeaderBlock()
-	//PrintIndexBlock()
+	PrintIndexBlock()
 	log.Println("\n==================================================\n")
 }
 
