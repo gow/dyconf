@@ -10,6 +10,7 @@ import (
 )
 
 var configPtr *Config
+var configMmap []byte
 
 // Initializes the config.
 func Init(fileName string) (err error) {
@@ -20,7 +21,7 @@ func Init(fileName string) (err error) {
 		return
 	}
 	// mmap the config file.
-	mmap, err := syscall.Mmap(
+	configMmap, err := syscall.Mmap(
 		int(mapFile.Fd()),
 		0,
 		int(CONFIG_FILE_SIZE),
@@ -32,18 +33,26 @@ func Init(fileName string) (err error) {
 		return
 	}
 	// Make sure mmap gave us enough memory.
-	if len(mmap) < int(CONFIG_FILE_SIZE) {
+	if len(configMmap) < int(CONFIG_FILE_SIZE) {
 		err = errors.New("Insufficient memmory")
 		mapFile.Close()
 		return
 	}
 	// Convert the byte array to Config struct type.
-	configPtr = (*Config)(unsafe.Pointer(&mmap[0]))
+	configPtr = (*Config)(unsafe.Pointer(&configMmap[0]))
 
 	if configPtr.header.Version() < uint16(1) {
 		configPtr.header.SetVersion(uint16(CONFIG_VERSION))
 	}
 	return
+}
+
+func Shutdown() {
+	if configPtr == nil {
+		log.Println("Nil config patr. Nothing to shutdown")
+		return
+	}
+	syscall.Munmap(configMmap)
 }
 
 func Print() {

@@ -29,6 +29,7 @@ func TestOTFCSingleSetAndGet(t *testing.T) {
 	testKey := "TestOTFCSetsKey"
 	testValue := []byte("Some test value with special characters. Tab: [	] CtrlA[]")
 	Init(confFile)
+	defer Shutdown()
 	Set(testKey, testValue)
 	retrivedValue, err := Get(testKey)
 
@@ -57,6 +58,7 @@ func TestOTFCSequentialMultipleSets(t *testing.T) {
 
 	inputMap := map[string][]byte{}
 	Init(confFile)
+	defer Shutdown()
 	for len(inputMap) < randomLimit {
 		key := getRandomLengthString(MAX_KEY_SIZE)
 		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
@@ -84,6 +86,7 @@ func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
 	randomLimit := rand.Intn(MAX_INDEX_RECORDS - 2)
 	log.Printf("Testing multiple sets & gets with %d samples (seed: %d)\n", randomLimit, seedVal)
 	Init(confFile)
+	defer Shutdown()
 	inputMap := map[string][]byte{}
 	for len(inputMap) < randomLimit {
 		key := getRandomLengthString(MAX_KEY_SIZE)
@@ -123,6 +126,7 @@ func TestOTFCEmptyGet(t *testing.T) {
 
 	testKey := "SomeNonExistant key"
 	Init(confFile)
+	defer Shutdown()
 	retrivedValue, err := Get(testKey)
 	if err == nil {
 		t.Errorf("Expected error; but none received")
@@ -146,6 +150,7 @@ func TestOTFCDoubleSets(t *testing.T) {
 	randomValue1 := []byte(getRandomString(64))
 	randomValue2 := []byte(getRandomString(64))
 	Init(confFile)
+	defer Shutdown()
 	if err := Set(testKey, randomValue1); err != nil {
 		t.Errorf("Expected no errors; but received [%s]", err)
 		return
@@ -169,6 +174,7 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 	rand.Seed(32) //Let the generated {key, values} be deterministic
 
 	Init(confFile)
+	defer Shutdown()
 	inputMap := map[string][]byte{}
 	// Fille the config.
 	for len(inputMap) < MAX_INDEX_RECORDS {
@@ -215,6 +221,7 @@ func ExampleOTCF() {
 func Example2_OTCF() {
 	var config *OTFC
 	config.Init()
+  defer Shutdown()
 	fmt.Println("Num Records: ", config.NumRecords())
 	//Output:
 	//Num Records: 
