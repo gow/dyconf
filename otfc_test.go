@@ -210,6 +210,29 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 	}
 }
 
+// Tests a delete call on an empty config file.
+func TestOTFCEmptyDelete(t *testing.T) {
+	seedVal := time.Now().Unix()
+	rand.Seed(seedVal)
+	MAX_KEY_SIZE := 256 //chars
+	//MAX_VALUE_SIZE := 50 //bytes
+	confFile := getTempFileName()
+	defer os.Remove(confFile)
+
+	key := getRandomLengthString(MAX_KEY_SIZE)
+	log.Printf("Testing Empty delete (seed: %d)\n", seedVal)
+
+	Init(confFile)
+	defer Shutdown()
+
+	err := Delete(key)
+	if err != nil {
+		Print()
+		t.Errorf("Expected no errors; but received [%s]", err)
+		return
+	}
+}
+
 /*
 func ExampleOTCF() {
 	config := &OTFC{}

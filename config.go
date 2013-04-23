@@ -57,3 +57,7 @@ func (configPtr *Config) get(key string) (value []byte, err error) {
 	}
 	return configPtr.data.get(offset, length)
 }
+
+func (configPtr *Config) delete(key string) error {
+	return configPtr.index.delete(key)
+}

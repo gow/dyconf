@@ -79,12 +79,27 @@ func (iBlock *indexBlock) get(
 		return
 	}
 	if indexRec.status != INDEX_REC_STATUS_ACTIVE {
-		err = fmt.Errorf("key [%s] is not active. Current status: [%x]",
-			key,
-			indexRec.status)
+		err = ConfigError{
+			ERR_INDEX_INACTIVE,
+			fmt.Sprintf("key [%s], status[%d]", key, indexRec.status)}
 		return
 	}
 	return indexRec.dataOffset, indexRec.dataLength, nil
+}
+
+func (iBlock *indexBlock) delete(key string) error {
+	if iBlock.count == 0 {
+		return nil
+	}
+	indexRecPtr, err := iBlock.find(key)
+	if err != nil {
+		return err
+	}
+	if indexRecPtr.status != INDEX_REC_STATUS_ACTIVE {
+		indexRecPtr.status = INDEX_REC_STATUS_DELETED
+		iBlock.count--
+	}
+	return nil
 }
 
 func (iBlock *indexBlock) find(key string) (*indexRecord, error) {

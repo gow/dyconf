@@ -98,3 +98,7 @@ func Get(key string) ([]byte, error) {
 	//log.Printf("Value from config.get(%s): [%s]", key, val)
 	return configPtr.get(key)
 }
+
+func Delete(key string) error {
+	return configPtr.delete(key)
+}
