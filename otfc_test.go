@@ -75,7 +75,7 @@ func TestOTFCSequentialMultipleSets(t *testing.T) {
 }
 
 // Tests multiple Set()s and Get()s sequentially
-func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
+func TestOTFCSequentialMultipleSetsGetsDeletes(t *testing.T) {
 	MAX_KEY_SIZE := 128  //chars
 	MAX_VALUE_SIZE := 50 //bytes
 	confFile := getTempFileName()
@@ -83,7 +83,7 @@ func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
 
 	seedVal := int64(32) //Let the generated {key, values} be deterministic
 	rand.Seed(seedVal)
-	randomLimit := rand.Intn(MAX_INDEX_RECORDS - 2)
+	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
 	log.Printf("Testing multiple sets & gets with %d samples (seed: %d)\n", randomLimit, seedVal)
 	Init(confFile)
 	defer Shutdown()
@@ -114,6 +114,15 @@ func TestOTFCSequentialMultipleSetsAndGets(t *testing.T) {
 				key,
 				val,
 				retrivedValue)
+			return
+		}
+	}
+
+	for key, _ := range inputMap {
+		err := Delete(key)
+		if err != nil {
+			Print()
+			t.Errorf("Expected no errors; but received [%v]", err)
 			return
 		}
 	}
@@ -212,15 +221,14 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 
 // Tests a delete call on an empty config file.
 func TestOTFCEmptyDelete(t *testing.T) {
-	seedVal := time.Now().Unix()
-	rand.Seed(seedVal)
+	log.Printf("Testing Empty delete\n")
+	randomize()
 	MAX_KEY_SIZE := 256 //chars
 	//MAX_VALUE_SIZE := 50 //bytes
 	confFile := getTempFileName()
 	defer os.Remove(confFile)
 
 	key := getRandomLengthString(MAX_KEY_SIZE)
-	log.Printf("Testing Empty delete (seed: %d)\n", seedVal)
 
 	Init(confFile)
 	defer Shutdown()
@@ -230,6 +238,36 @@ func TestOTFCEmptyDelete(t *testing.T) {
 		Print()
 		t.Errorf("Expected no errors; but received [%s]", err)
 		return
+	}
+}
+
+// Tests the deletion on non existing keys
+func TestOTFCDeleteNonExistingKey(t *testing.T) {
+	log.Println("Testing deletion of non existing keys")
+	randomize()
+	MAX_KEY_SIZE := 256 //chars
+	MAX_VALUE_SIZE := 64
+	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
+
+	Init(getTempFileName())
+	defer Shutdown()
+	inputMap := map[string][]byte{}
+	inputMap["test"] = []byte("Value")
+	Set("test", []byte("value"))
+	for len(inputMap) < randomLimit {
+		key := getRandomLengthString(MAX_KEY_SIZE)
+		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
+		if _, ok := inputMap[key]; ok {
+			continue
+		}
+		inputMap[key] = val
+		err := Delete(key)
+		expectConfigError(t, ERR_INDEX_KEY_NOT_FOUND, err)
+		if err := Set(key, val); err != nil {
+			Print()
+			t.Errorf("Expected no errors; but received [%s]", err)
+			return
+		}
 	}
 }
 
@@ -252,6 +290,11 @@ func Example2_OTCF() {
 */
 
 /////////// Helper functions /////////////
+func randomize() {
+	seedVal := time.Now().Unix()
+	rand.Seed(seedVal)
+	log.Printf("Random seed value: [%d]", seedVal)
+}
 func expectConfigError(t *testing.T, errNo int, err error) bool {
 	if configError, ok := err.(ConfigError); ok {
 		if configError.ErrNo() == errNo {
