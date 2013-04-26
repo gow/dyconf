@@ -41,11 +41,8 @@ func (configPtr *Config) set(key string, value []byte) (err error) {
 	if newOffset == 0 {
 		return ConfigError{}
 	}
-	//log.Printf("Data copied. new Offset: [%d]\n", newOffset)
 
-	//log.Println("WriteOffset: ", configPtr.header.writeOffset)
 	configPtr.header.writeOffset = configPtr.header.writeOffset + dataLength
-	//log.Println("WriteOffset: ", configPtr.header.writeOffset)
 	configPtr.header.SetRecordCount(count + 1)
 	return nil
 }

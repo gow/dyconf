@@ -271,24 +271,6 @@ func TestOTFCDeleteNonExistingKey(t *testing.T) {
 	}
 }
 
-/*
-func ExampleOTCF() {
-	config := &OTFC{}
-	fmt.Println("Num Records: ", config.NumRecords())
-	//Output:
-	//Num Records:  0
-}
-
-func Example2_OTCF() {
-	var config *OTFC
-	config.Init()
-  defer Shutdown()
-	fmt.Println("Num Records: ", config.NumRecords())
-	//Output:
-	//Num Records: 
-}
-*/
-
 /////////// Helper functions /////////////
 func randomize() {
 	seedVal := time.Now().Unix()
