@@ -10,6 +10,7 @@ _test
 # Misc
 tags
 .FILE_LIST
+.arc/
 
 # Architecture specific extensions/prefixes
 *.[568vq]
