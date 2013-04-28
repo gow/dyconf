@@ -48,7 +48,7 @@ func Init(fileName string) (err error) {
 
 func Shutdown() {
 	if configPtr == nil {
-		log.Println("Nil config patr. Nothing to shutdown")
+		log.Println("Nil config pointer. Nothing to shutdown")
 		return
 	}
 	syscall.Munmap(configMmap)
