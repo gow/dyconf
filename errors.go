@@ -1,7 +1,5 @@
 package otfc
 
-import ()
-
 const (
 	ERR_INDEX_FULL              = 01
 	ERR_INDEX_KEY_NOT_FOUND     = 02

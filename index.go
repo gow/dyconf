@@ -2,7 +2,6 @@ package otfc
 
 import (
 	"crypto/md5"
-	//"errors"
 	"fmt"
 	"log"
 )

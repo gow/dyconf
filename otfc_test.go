@@ -1,15 +1,13 @@
 package otfc
 
 import (
-	"os"
-	//"fmt"
 	"bytes"
+	"log"
+	"math/rand"
+	"os"
 	"testing"
 	"time"
 	"unsafe"
-	//"crypto/md5"
-	"log"
-	"math/rand"
 )
 
 func TestOTFCStructSize(t *testing.T) {

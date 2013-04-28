@@ -1,9 +1,8 @@
 package otfc
 
 import (
-	"log"
-	//"fmt"
 	"errors"
+	"log"
 	"os"
 	"syscall"
 	"unsafe"

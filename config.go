@@ -2,7 +2,6 @@ package otfc
 
 import (
 	"fmt"
-	//"log"
 )
 
 const (
