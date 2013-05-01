@@ -12,15 +12,15 @@ const (
 	CONFIG_FILE_SIZE = 294912
 )
 
-type Config struct {
+type ConfigFile struct {
 	header configHeader
 	index  indexBlock
 	data   dataBlock
 }
 
 // Initializes the config.
-func InitConfig(
-	fileName string) (configPtr *Config, configMmap []byte, err error) {
+func InitConfigFile(
+	fileName string) (configPtr *ConfigFile, configMmap []byte, err error) {
 
 	mapFile, err := createFile(fileName, CONFIG_FILE_SIZE)
 	//mapFile, err := os.Open(fileName)
@@ -45,7 +45,7 @@ func InitConfig(
 		return
 	}
 	// Convert the byte array to Config struct type.
-	configPtr = (*Config)(unsafe.Pointer(&configMmap[0]))
+	configPtr = (*ConfigFile)(unsafe.Pointer(&configMmap[0]))
 
 	if configPtr.header.Version() < uint16(1) {
 		configPtr.header.SetVersion(uint16(CONFIG_VERSION))
@@ -54,7 +54,7 @@ func InitConfig(
 }
 
 // Sets the given config key and value pair.
-func (configPtr *Config) set(key string, value []byte) (err error) {
+func (configPtr *ConfigFile) set(key string, value []byte) (err error) {
 	// Check if the key already exists
 	if _, err := configPtr.get(key); err == nil {
 		return ConfigError{
@@ -84,7 +84,7 @@ func (configPtr *Config) set(key string, value []byte) (err error) {
 	return nil
 }
 
-func (configPtr *Config) get(key string) (value []byte, err error) {
+func (configPtr *ConfigFile) get(key string) (value []byte, err error) {
 	offset, length, err := configPtr.index.get(key)
 	if err != nil {
 		return
@@ -92,6 +92,6 @@ func (configPtr *Config) get(key string) (value []byte, err error) {
 	return configPtr.data.get(offset, length)
 }
 
-func (configPtr *Config) delete(key string) error {
+func (configPtr *ConfigFile) delete(key string) error {
 	return configPtr.index.delete(key)
 }

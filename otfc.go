@@ -8,12 +8,12 @@ import (
 	//"unsafe"
 )
 
-var configPtr *Config
+var configPtr *ConfigFile
 var configMmap []byte
 
 // Initializes the config.
 func Init(fileName string) (err error) {
-	configPtr, configMmap, err = InitConfig(fileName)
+	configPtr, configMmap, err = InitConfigFile(fileName)
 	return
 }
 

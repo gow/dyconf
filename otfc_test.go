@@ -12,7 +12,7 @@ import (
 
 func TestOTFCStructSize(t *testing.T) {
 	expectedSize := uint32(CONFIG_FILE_SIZE)
-	config := Config{}
+	config := ConfigFile{}
 	actualSize := uint32(unsafe.Sizeof(config))
 	if actualSize != expectedSize {
 		t.Errorf("Expected size: [%d], Actual size: [%d]", expectedSize, actualSize)
