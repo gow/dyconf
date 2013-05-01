@@ -2,6 +2,7 @@ package otfc
 
 import (
 	"bytes"
+	"github.com/gow/otfc/config"
 	"log"
 	"math/rand"
 	"os"
@@ -11,8 +12,8 @@ import (
 )
 
 func TestOTFCStructSize(t *testing.T) {
-	expectedSize := uint32(CONFIG_FILE_SIZE)
-	config := ConfigFile{}
+	expectedSize := uint32(config.FILE_SIZE)
+	config := config.ConfigFile{}
 	actualSize := uint32(unsafe.Sizeof(config))
 	if actualSize != expectedSize {
 		t.Errorf("Expected size: [%d], Actual size: [%d]", expectedSize, actualSize)
@@ -51,7 +52,7 @@ func TestOTFCSequentialMultipleSets(t *testing.T) {
 
 	seedVal := time.Now().Unix()
 	rand.Seed(seedVal)
-	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
+	randomLimit := rand.Intn(config.MAX_INDEX_RECORDS)
 	log.Printf("Testing multiple sets with %d samples (seed: %d)\n", randomLimit, seedVal)
 
 	inputMap := map[string][]byte{}
@@ -81,7 +82,7 @@ func TestOTFCSequentialMultipleSetsGetsDeletes(t *testing.T) {
 
 	seedVal := int64(32) //Let the generated {key, values} be deterministic
 	rand.Seed(seedVal)
-	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
+	randomLimit := rand.Intn(config.MAX_INDEX_RECORDS)
 	log.Printf("Testing multiple sets & gets with %d samples (seed: %d)\n", randomLimit, seedVal)
 	Init(confFile)
 	defer Shutdown()
@@ -138,7 +139,7 @@ func TestOTFCEmptyGet(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected error; but none received")
 	} else {
-		expectConfigError(t, ERR_INDEX_KEY_NOT_FOUND, err)
+		expectConfigError(t, config.ERR_INDEX_KEY_NOT_FOUND, err)
 	}
 	if retrivedValue != nil {
 		t.Errorf("Value received for non-existant key. key: [%s], value [%x]",
@@ -166,7 +167,7 @@ func TestOTFCDoubleSets(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected an error; but none received")
 	} else {
-		expectConfigError(t, ERR_CONFIG_SET_EXISTING_KEY, err)
+		expectConfigError(t, config.ERR_CONFIG_SET_EXISTING_KEY, err)
 	}
 	return
 }
@@ -184,7 +185,7 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 	defer Shutdown()
 	inputMap := map[string][]byte{}
 	// Fille the config.
-	for len(inputMap) < MAX_INDEX_RECORDS {
+	for len(inputMap) < config.MAX_INDEX_RECORDS {
 		key := getRandomLengthString(MAX_KEY_SIZE)
 		val := getRandomLengthByteSlice(MAX_VALUE_SIZE)
 		if _, ok := inputMap[key]; ok {
@@ -212,7 +213,7 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error; but none received")
 		} else {
-			expectConfigError(t, ERR_INDEX_FULL, err)
+			expectConfigError(t, config.ERR_INDEX_FULL, err)
 		}
 	}
 }
@@ -245,7 +246,7 @@ func TestOTFCDeleteNonExistingKey(t *testing.T) {
 	randomize()
 	MAX_KEY_SIZE := 256 //chars
 	MAX_VALUE_SIZE := 64
-	randomLimit := rand.Intn(MAX_INDEX_RECORDS)
+	randomLimit := rand.Intn(config.MAX_INDEX_RECORDS)
 
 	Init(getTempFileName())
 	defer Shutdown()
@@ -260,7 +261,7 @@ func TestOTFCDeleteNonExistingKey(t *testing.T) {
 		}
 		inputMap[key] = val
 		err := Delete(key)
-		expectConfigError(t, ERR_INDEX_KEY_NOT_FOUND, err)
+		expectConfigError(t, config.ERR_INDEX_KEY_NOT_FOUND, err)
 		if err := Set(key, val); err != nil {
 			Print()
 			t.Errorf("Expected no errors; but received [%s]", err)
@@ -276,12 +277,12 @@ func randomize() {
 	log.Printf("Random seed value: [%d]", seedVal)
 }
 func expectConfigError(t *testing.T, errNo int, err error) bool {
-	if configError, ok := err.(ConfigError); ok {
-		if configError.ErrNo() == errNo {
+	if configError, ok := err.(config.Error); ok {
+		if configError.ErrNo == errNo {
 			return true
 		}
 	}
-	t.Errorf("Expected error [%s]; received [%s]", ConfigError{errNo, ""}, err)
+	t.Errorf("Expected error [%s]; received [%s]", config.Error{errNo, ""}, err)
 	return false
 }
 

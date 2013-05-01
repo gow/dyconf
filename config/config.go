@@ -1,4 +1,4 @@
-package otfc
+package config
 
 import (
 	"errors"
@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	CONFIG_VERSION   = 1
-	CONFIG_FILE_SIZE = 294912
+	VERSION   = 1
+	FILE_SIZE = 294912
 )
 
 type ConfigFile struct {
@@ -19,10 +19,10 @@ type ConfigFile struct {
 }
 
 // Initializes the config.
-func InitConfigFile(
+func New(
 	fileName string) (configPtr *ConfigFile, configMmap []byte, err error) {
 
-	mapFile, err := createFile(fileName, CONFIG_FILE_SIZE)
+	mapFile, err := createFile(fileName, FILE_SIZE)
 	//mapFile, err := os.Open(fileName)
 	if err != nil {
 		return
@@ -31,7 +31,7 @@ func InitConfigFile(
 	configMmap, err = syscall.Mmap(
 		int(mapFile.Fd()),
 		0,
-		int(CONFIG_FILE_SIZE),
+		int(FILE_SIZE),
 		syscall.PROT_READ|syscall.PROT_WRITE,
 		syscall.MAP_SHARED)
 	if err != nil {
@@ -39,7 +39,7 @@ func InitConfigFile(
 		return
 	}
 	// Make sure mmap gave us enough memory.
-	if len(configMmap) < int(CONFIG_FILE_SIZE) {
+	if len(configMmap) < int(FILE_SIZE) {
 		err = errors.New("Insufficient memmory")
 		mapFile.Close()
 		return
@@ -48,16 +48,16 @@ func InitConfigFile(
 	configPtr = (*ConfigFile)(unsafe.Pointer(&configMmap[0]))
 
 	if configPtr.header.Version() < uint16(1) {
-		configPtr.header.SetVersion(uint16(CONFIG_VERSION))
+		configPtr.header.SetVersion(uint16(VERSION))
 	}
 	return
 }
 
 // Sets the given config key and value pair.
-func (configPtr *ConfigFile) set(key string, value []byte) (err error) {
+func (configPtr *ConfigFile) Set(key string, value []byte) (err error) {
 	// Check if the key already exists
-	if _, err := configPtr.get(key); err == nil {
-		return ConfigError{
+	if _, err := configPtr.Get(key); err == nil {
+		return Error{
 			ERR_CONFIG_SET_EXISTING_KEY,
 			fmt.Sprintf("key [%s]", key)}
 	}
@@ -76,7 +76,7 @@ func (configPtr *ConfigFile) set(key string, value []byte) (err error) {
 		return
 	}
 	if newOffset == 0 {
-		return ConfigError{}
+		return Error{}
 	}
 
 	configPtr.header.writeOffset = configPtr.header.writeOffset + dataLength
@@ -84,7 +84,7 @@ func (configPtr *ConfigFile) set(key string, value []byte) (err error) {
 	return nil
 }
 
-func (configPtr *ConfigFile) get(key string) (value []byte, err error) {
+func (configPtr *ConfigFile) Get(key string) (value []byte, err error) {
 	offset, length, err := configPtr.index.get(key)
 	if err != nil {
 		return
@@ -92,6 +92,6 @@ func (configPtr *ConfigFile) get(key string) (value []byte, err error) {
 	return configPtr.data.get(offset, length)
 }
 
-func (configPtr *ConfigFile) delete(key string) error {
+func (configPtr *ConfigFile) Delete(key string) error {
 	return configPtr.index.delete(key)
 }

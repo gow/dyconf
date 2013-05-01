@@ -1,4 +1,4 @@
-package otfc
+package config
 
 const (
 	ERR_INDEX_FULL              = 01
@@ -7,14 +7,14 @@ const (
 	ERR_CONFIG_SET_EXISTING_KEY = 04
 )
 
-type ConfigError struct {
-	errNo   int    // Error Number
-	errInfo string // Additional error info
+type Error struct {
+	ErrNo   int    // Error Number
+	ErrInfo string // Additional error info
 }
 
-func (e ConfigError) Error() string {
+func (e Error) Error() string {
 	errString := "Unknown Error"
-	switch e.errNo {
+	switch e.ErrNo {
 	case ERR_INDEX_FULL:
 		errString = "index block has reached max capacity"
 	case ERR_INDEX_KEY_NOT_FOUND:
@@ -24,9 +24,5 @@ func (e ConfigError) Error() string {
 	case ERR_INDEX_INACTIVE:
 		errString = "key is either inactive or deleted"
 	}
-	return "Error: " + errString + ". " + e.errInfo
-}
-
-func (e ConfigError) ErrNo() int {
-	return e.errNo
+	return "Error: " + errString + ". " + e.ErrInfo
 }

@@ -3,17 +3,17 @@ package otfc
 import (
 	//"errors"
 	"log"
-	"os"
+	//"os"
+	"github.com/gow/otfc/config"
 	"syscall"
-	//"unsafe"
 )
 
-var configPtr *ConfigFile
+var configPtr *config.ConfigFile
 var configMmap []byte
 
 // Initializes the config.
 func Init(fileName string) (err error) {
-	configPtr, configMmap, err = InitConfigFile(fileName)
+	configPtr, configMmap, err = config.New(fileName)
 	return
 }
 
@@ -27,48 +27,21 @@ func Shutdown() {
 
 func Print() {
 	log.Println("\n==================================================\n")
-	PrintHeaderBlock()
-	PrintIndexBlock()
+	configPtr.PrintHeaderBlock()
+	configPtr.PrintIndexBlock()
 	log.Println("\n==================================================\n")
 }
 
-func PrintIndexBlock() {
-	configPtr.index.print()
-}
-
-func PrintHeaderBlock() {
-	configPtr.header.print()
-}
-
-func createFile(fileName string, size int32) (file *os.File, err error) {
-	file, err = os.Create(fileName)
-	if err != nil {
-		return
-	}
-	_, err = file.Seek(int64(size), 0)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	_, err = file.Write([]byte("x"))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	return
-}
-
 func Set(key string, value []byte) error {
-	return configPtr.set(key, value)
+	return configPtr.Set(key, value)
 }
 
 func Get(key string) ([]byte, error) {
 	//val, _ := configPtr.get(key)
 	//log.Printf("Value from config.get(%s): [%s]", key, val)
-	return configPtr.get(key)
+	return configPtr.Get(key)
 }
 
 func Delete(key string) error {
-	return configPtr.delete(key)
+	return configPtr.Delete(key)
 }

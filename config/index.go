@@ -1,4 +1,4 @@
-package otfc
+package config
 
 import (
 	"crypto/md5"
@@ -55,7 +55,7 @@ func (iBlock *indexBlock) set(
 
 	//log.Printf("Index size: %d\n", iBlock.count)
 	if iBlock.count >= MAX_INDEX_RECORDS {
-		return ConfigError{ERR_INDEX_FULL, fmt.Sprintf("key [%s]", key)}
+		return Error{ERR_INDEX_FULL, fmt.Sprintf("key [%s]", key)}
 	}
 	// TODO: Check for key existance and overwrite.
 	// Add the new index record at the end.
@@ -78,7 +78,7 @@ func (iBlock *indexBlock) get(
 		return
 	}
 	if indexRec.status != INDEX_REC_STATUS_ACTIVE {
-		err = ConfigError{
+		err = Error{
 			ERR_INDEX_INACTIVE,
 			fmt.Sprintf("key [%s], status[%d]", key, indexRec.status)}
 		return
@@ -109,7 +109,7 @@ func (iBlock *indexBlock) find(key string) (*indexRecord, error) {
 			return indexRecPtr, nil
 		}
 	}
-	return nil, ConfigError{ERR_INDEX_KEY_NOT_FOUND, fmt.Sprintf("key [%s]", key)}
+	return nil, Error{ERR_INDEX_KEY_NOT_FOUND, fmt.Sprintf("key [%s]", key)}
 }
 
 func getKeyHash(key string) (ret [16]byte) {

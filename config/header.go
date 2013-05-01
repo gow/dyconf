@@ -1,4 +1,4 @@
-package otfc
+package config
 
 import (
 	"fmt"
