@@ -1,11 +1,11 @@
 package otfc
 
 import (
-	"errors"
+	//"errors"
 	"log"
 	"os"
 	"syscall"
-	"unsafe"
+	//"unsafe"
 )
 
 var configPtr *Config
@@ -13,36 +13,7 @@ var configMmap []byte
 
 // Initializes the config.
 func Init(fileName string) (err error) {
-	log.Printf("Config File: %s", fileName)
-	mapFile, err := createFile(fileName, CONFIG_FILE_SIZE)
-	//mapFile, err := os.Open(fileName)
-	if err != nil {
-		return
-	}
-	// mmap the config file.
-	configMmap, err := syscall.Mmap(
-		int(mapFile.Fd()),
-		0,
-		int(CONFIG_FILE_SIZE),
-		syscall.PROT_READ|syscall.PROT_WRITE,
-		syscall.MAP_SHARED)
-	if err != nil {
-		mapFile.Close()
-		log.Printf("%s\n", err)
-		return
-	}
-	// Make sure mmap gave us enough memory.
-	if len(configMmap) < int(CONFIG_FILE_SIZE) {
-		err = errors.New("Insufficient memmory")
-		mapFile.Close()
-		return
-	}
-	// Convert the byte array to Config struct type.
-	configPtr = (*Config)(unsafe.Pointer(&configMmap[0]))
-
-	if configPtr.header.Version() < uint16(1) {
-		configPtr.header.SetVersion(uint16(CONFIG_VERSION))
-	}
+	configPtr, configMmap, err = InitConfig(fileName)
 	return
 }
 
