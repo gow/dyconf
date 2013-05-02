@@ -18,9 +18,19 @@ type ConfigFile struct {
 	data   dataBlock
 }
 
-// Initializes the config.
 func New(
 	fileName string) (configPtr *ConfigFile, configMmap []byte, err error) {
+  return initWithProtOptions(fileName, syscall.PROT_READ)
+}
+func NewWritable(
+	fileName string) (configPtr *ConfigFile, configMmap []byte, err error) {
+  return initWithProtOptions(fileName, syscall.PROT_READ|syscall.PROT_WRITE)
+}
+
+// Initializes the config.
+func initWithProtOptions(
+	fileName string,
+  prot int) (configPtr *ConfigFile, configMmap []byte, err error) {
 
 	mapFile, err := createFile(fileName, FILE_SIZE)
 	//mapFile, err := os.Open(fileName)
@@ -30,9 +40,9 @@ func New(
 	// mmap the config file.
 	configMmap, err = syscall.Mmap(
 		int(mapFile.Fd()),
-		0,
+		0, // offset
 		int(FILE_SIZE),
-		syscall.PROT_READ|syscall.PROT_WRITE,
+    prot,
 		syscall.MAP_SHARED)
 	if err != nil {
 		mapFile.Close()

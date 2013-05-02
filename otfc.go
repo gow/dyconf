@@ -13,7 +13,7 @@ var configMmap []byte
 
 // Initializes the config.
 func Init(fileName string) (err error) {
-	configPtr, configMmap, err = config.New(fileName)
+	configPtr, configMmap, err = config.NewWritable(fileName)
 	return
 }
 
