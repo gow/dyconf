@@ -1,9 +1,7 @@
 package otfc
 
 import (
-	//"errors"
 	"log"
-	//"os"
 	"github.com/gow/otfc/config"
 	"syscall"
 )
@@ -37,8 +35,6 @@ func Set(key string, value []byte) error {
 }
 
 func Get(key string) ([]byte, error) {
-	//val, _ := configPtr.get(key)
-	//log.Printf("Value from config.get(%s): [%s]", key, val)
 	return configPtr.Get(key)
 }
 
