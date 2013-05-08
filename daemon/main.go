@@ -13,4 +13,6 @@ func main() {
 	flag.Parse()
 
 	log.Println(*updateMethod)
+	daemon := new(otfcDaemon)
+	daemon.init("/tmp/qwerty1234")
 }
