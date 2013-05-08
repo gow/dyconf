@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/gow/otfc/config"
 	"log"
 	"net/http"
@@ -43,6 +44,14 @@ func (daemon *otfcDaemon) httpCallbackSet(
 
 	key := r.URL.Query().Get("key")
 	value := r.URL.Query().Get("value")
-
 	log.Println("Key: ", key, "Value: ", value)
+	if value == "" {
+		sendHttpError(w, Error{ErrNo: ERR_DMN_INVALID_VALUE}, http.StatusNotAcceptable)
+		return
+	}
+}
+
+func sendHttpError(w http.ResponseWriter, err config.JSONable, errCode int) {
+	jsonResponse, _ := json.Marshal(err.JSONableError())
+	http.Error(w, string(jsonResponse), errCode)
 }

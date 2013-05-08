@@ -1,11 +1,15 @@
 package config
 
 const (
-	ERR_INDEX_FULL              = 01
-	ERR_INDEX_KEY_NOT_FOUND     = 02
-	ERR_INDEX_INACTIVE          = 03
-	ERR_CONFIG_SET_EXISTING_KEY = 04
+	ERR_INDEX_FULL              = 2001
+	ERR_INDEX_KEY_NOT_FOUND     = 2002
+	ERR_INDEX_INACTIVE          = 2003
+	ERR_CONFIG_SET_EXISTING_KEY = 1004
 )
+
+type JSONable interface {
+	JSONableError() interface{}
+}
 
 type Error struct {
 	ErrNo   int    // Error Number
@@ -13,6 +17,10 @@ type Error struct {
 }
 
 func (e Error) Error() string {
+	return "Error: " + e.ErrorString()
+}
+
+func (e Error) ErrorString() string {
 	errString := "Unknown Error"
 	switch e.ErrNo {
 	case ERR_INDEX_FULL:
@@ -24,5 +32,15 @@ func (e Error) Error() string {
 	case ERR_INDEX_INACTIVE:
 		errString = "key is either inactive or deleted"
 	}
-	return "Error: " + errString + ". " + e.ErrInfo
+	return errString + ". " + e.ErrInfo
+}
+
+func (e Error) JSONableError() interface{} {
+	return struct {
+		Error   string
+		ErrorNo int
+	}{
+		e.ErrorString(),
+		e.ErrNo,
+	}
 }

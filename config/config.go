@@ -20,17 +20,17 @@ type ConfigFile struct {
 
 func New(
 	fileName string) (configPtr *ConfigFile, configMmap []byte, err error) {
-  return initWithProtOptions(fileName, syscall.PROT_READ)
+	return initWithProtOptions(fileName, syscall.PROT_READ)
 }
 func NewWritable(
 	fileName string) (configPtr *ConfigFile, configMmap []byte, err error) {
-  return initWithProtOptions(fileName, syscall.PROT_READ|syscall.PROT_WRITE)
+	return initWithProtOptions(fileName, syscall.PROT_READ|syscall.PROT_WRITE)
 }
 
 // Initializes the config.
 func initWithProtOptions(
 	fileName string,
-  prot int) (configPtr *ConfigFile, configMmap []byte, err error) {
+	prot int) (configPtr *ConfigFile, configMmap []byte, err error) {
 
 	mapFile, err := createFile(fileName, FILE_SIZE)
 	//mapFile, err := os.Open(fileName)
@@ -42,7 +42,7 @@ func initWithProtOptions(
 		int(mapFile.Fd()),
 		0, // offset
 		int(FILE_SIZE),
-    prot,
+		prot,
 		syscall.MAP_SHARED)
 	if err != nil {
 		mapFile.Close()
