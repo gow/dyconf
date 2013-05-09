@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/gow/otfc/config"
 	"log"
 	"net/http"
@@ -39,19 +40,39 @@ func (daemon *otfcDaemon) initServer() error {
 }
 
 func (daemon *otfcDaemon) httpCallbackSet(
-	w http.ResponseWriter,
-	r *http.Request) {
+	resp http.ResponseWriter,
+	req *http.Request) {
 
-	key := r.URL.Query().Get("key")
-	value := r.URL.Query().Get("value")
+	key := req.URL.Query().Get("key")
+	value := req.URL.Query().Get("value")
 	log.Println("Key: ", key, "Value: ", value)
 	if value == "" {
-		sendHttpError(w, Error{ErrNo: ERR_DMN_INVALID_VALUE}, http.StatusNotAcceptable)
+		sendHttpError(
+			resp,
+			Error{ErrNo: ERR_DMN_INVALID_VALUE},
+			http.StatusNotAcceptable)
 		return
 	}
+	err := daemon.configPtr.Set(key, []byte(value))
+	if err != nil {
+		sendHttpJSONResponse(resp, err)
+		return
+	}
+	sendHttpJSONResponse(
+		resp,
+		struct {
+			Status string
+			Key    string
+			Value  string
+		}{"OK", key, value})
 }
 
 func sendHttpError(w http.ResponseWriter, err config.JSONable, errCode int) {
 	jsonResponse, _ := json.Marshal(err.JSONableError())
-	http.Error(w, string(jsonResponse), errCode)
+	http.Error(w, string(jsonResponse)+"\n", errCode)
+}
+
+func sendHttpJSONResponse(w http.ResponseWriter, data interface{}) {
+	jsonResponse, _ := json.Marshal(data)
+	fmt.Fprintf(w, string(jsonResponse)+"\n")
 }

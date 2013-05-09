@@ -6,6 +6,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	var updateMethod = flag.String(
 		"update-method",
 		"push",
