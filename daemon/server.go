@@ -67,8 +67,8 @@ func (daemon *otfcDaemon) httpCallbackSet(
 		}{"OK", key, value})
 }
 
-func sendHttpError(w http.ResponseWriter, err config.JSONable, errCode int) {
-	jsonResponse, _ := json.Marshal(err.JSONableError())
+func sendHttpError(w http.ResponseWriter, err interface{}, errCode int) {
+	jsonResponse, _ := json.Marshal(err)
 	http.Error(w, string(jsonResponse)+"\n", errCode)
 }
 
