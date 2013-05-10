@@ -15,5 +15,8 @@ func main() {
 
 	log.Println(*updateMethod)
 	daemon := new(otfcDaemon)
-	daemon.init("/tmp/qwerty1234")
+	err := daemon.init("/tmp/qwerty1234")
+	if err != nil {
+		log.Fatal(err)
+	}
 }

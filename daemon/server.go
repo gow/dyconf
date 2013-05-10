@@ -32,11 +32,35 @@ func (daemon *otfcDaemon) initServer() error {
 		func(w http.ResponseWriter, r *http.Request) {
 			daemon.httpCallbackSet(w, r)
 		})
+	http.HandleFunc(
+		"/get",
+		func(w http.ResponseWriter, r *http.Request) {
+			daemon.httpCallbackGet(w, r)
+		})
 	err := http.ListenAndServe(":"+HTTP_PORT, nil)
 	if err != nil {
 		return err
 	}
 	return err
+}
+
+func (daemon *otfcDaemon) httpCallbackGet(
+	resp http.ResponseWriter,
+	req *http.Request) {
+
+	key := req.URL.Query().Get("key")
+	value, err := daemon.configPtr.Get(key)
+	if err != nil {
+		sendHttpError(resp, err, http.StatusBadRequest)
+		return
+	}
+	sendHttpJSONResponse(
+		resp,
+		struct {
+			Status string
+			Key    string
+			Value  []byte
+		}{"OK", key, value})
 }
 
 func (daemon *otfcDaemon) httpCallbackSet(
@@ -68,7 +92,11 @@ func (daemon *otfcDaemon) httpCallbackSet(
 }
 
 func sendHttpError(w http.ResponseWriter, err interface{}, errCode int) {
-	jsonResponse, _ := json.Marshal(err)
+	response := struct {
+		Status string
+		Err    interface{}
+	}{"error", err}
+	jsonResponse, _ := json.Marshal(response)
 	http.Error(w, string(jsonResponse)+"\n", errCode)
 }
 
