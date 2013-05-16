@@ -37,6 +37,11 @@ func (daemon *otfcDaemon) initServer() error {
 		func(w http.ResponseWriter, r *http.Request) {
 			daemon.httpCallbackGet(w, r)
 		})
+	http.HandleFunc(
+		"/delete",
+		func(w http.ResponseWriter, r *http.Request) {
+			daemon.httpCallbackDelete(w, r)
+		})
 	err := http.ListenAndServe(":"+HTTP_PORT, nil)
 	if err != nil {
 		return err
@@ -89,6 +94,24 @@ func (daemon *otfcDaemon) httpCallbackSet(
 			Key    string
 			Value  string
 		}{"OK", key, value})
+}
+
+func (daemon *otfcDaemon) httpCallbackDelete(
+	resp http.ResponseWriter,
+	req *http.Request) {
+
+	key := req.URL.Query().Get("key")
+	err := daemon.configPtr.Delete(key)
+	if err != nil {
+		sendHttpError(resp, err, http.StatusBadRequest)
+		return
+	}
+	sendHttpJSONResponse(
+		resp,
+		struct {
+			Status string
+			Key    string
+		}{"OK", key})
 }
 
 func sendHttpError(w http.ResponseWriter, err interface{}, errCode int) {

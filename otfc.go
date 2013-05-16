@@ -1,8 +1,8 @@
 package otfc
 
 import (
-	"log"
 	"github.com/gow/otfc/config"
+	"log"
 	"syscall"
 )
 
