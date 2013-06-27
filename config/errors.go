@@ -7,10 +7,6 @@ const (
 	ERR_CONFIG_SET_EXISTING_KEY = 1004
 )
 
-type JSONable interface {
-	JSONableError() interface{}
-}
-
 type Error struct {
 	ErrNo   int    // Error Number
 	ErrInfo string // Additional error info
@@ -33,14 +29,4 @@ func (e Error) ErrorString() string {
 		errString = "key is either inactive or deleted"
 	}
 	return errString + ". " + e.ErrInfo
-}
-
-func (e Error) JSONableError() interface{} {
-	return struct {
-		Error   string
-		ErrorNo int
-	}{
-		e.ErrorString(),
-		e.ErrNo,
-	}
 }
