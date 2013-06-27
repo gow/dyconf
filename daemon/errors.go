@@ -21,13 +21,3 @@ func (e Error) ErrorString() string {
 	}
 	return errString + ". " + e.ErrInfo
 }
-
-func (e Error) JSONableError() interface{} {
-	return struct {
-		Error   string
-		ErrorNo int
-	}{
-		e.ErrorString(),
-		e.ErrNo,
-	}
-}
