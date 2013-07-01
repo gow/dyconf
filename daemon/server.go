@@ -12,35 +12,27 @@ const (
 	HTTP_PORT = "8088"
 )
 
-type otfcDaemon struct {
-	configPtr  *config.ConfigFile
-	configMmap []byte
+type httpServer struct {
+	configPtr *config.ConfigFile
 }
 
-func (daemon *otfcDaemon) init(fileName string) (err error) {
-	daemon.configPtr, daemon.configMmap, err = config.NewWritable(fileName)
-	if err != nil {
-		return err
-	}
-	err = daemon.initServer()
-	return err
-}
-
-func (daemon *otfcDaemon) initServer() error {
+func (server *httpServer) start() error {
 	http.HandleFunc(
 		"/set",
 		func(w http.ResponseWriter, r *http.Request) {
-			daemon.httpCallbackSet(w, r)
+			server.httpCallbackSet(w, r)
 		})
 	http.HandleFunc(
 		"/get",
 		func(w http.ResponseWriter, r *http.Request) {
-			daemon.httpCallbackGet(w, r)
+			server.httpCallbackGet(w, r)
 		})
 	http.HandleFunc(
 		"/delete",
 		func(w http.ResponseWriter, r *http.Request) {
-			daemon.httpCallbackDelete(w, r)
+			log.Println(server)
+			log.Println("Handling delete request")
+			server.httpCallbackDelete(w, r)
 		})
 	err := http.ListenAndServe(":"+HTTP_PORT, nil)
 	if err != nil {
@@ -49,12 +41,12 @@ func (daemon *otfcDaemon) initServer() error {
 	return err
 }
 
-func (daemon *otfcDaemon) httpCallbackGet(
+func (server *httpServer) httpCallbackGet(
 	resp http.ResponseWriter,
 	req *http.Request) {
 
 	key := req.URL.Query().Get("key")
-	value, err := daemon.configPtr.Get(key)
+	value, err := server.configPtr.Get(key)
 	if err != nil {
 		sendHttpError(resp, err, http.StatusBadRequest)
 		return
@@ -68,7 +60,7 @@ func (daemon *otfcDaemon) httpCallbackGet(
 		}{"OK", key, value})
 }
 
-func (daemon *otfcDaemon) httpCallbackSet(
+func (server *httpServer) httpCallbackSet(
 	resp http.ResponseWriter,
 	req *http.Request) {
 
@@ -82,7 +74,7 @@ func (daemon *otfcDaemon) httpCallbackSet(
 			http.StatusNotAcceptable)
 		return
 	}
-	err := daemon.configPtr.Set(key, []byte(value))
+	err := server.configPtr.Set(key, []byte(value))
 	if err != nil {
 		sendHttpJSONResponse(resp, err)
 		return
@@ -96,12 +88,13 @@ func (daemon *otfcDaemon) httpCallbackSet(
 		}{"OK", key, value})
 }
 
-func (daemon *otfcDaemon) httpCallbackDelete(
+func (server *httpServer) httpCallbackDelete(
 	resp http.ResponseWriter,
 	req *http.Request) {
 
 	key := req.URL.Query().Get("key")
-	err := daemon.configPtr.Delete(key)
+	err := server.configPtr.Delete(key)
+	log.Println("httpCallbackDelete [key, err]: ", key, err)
 	if err != nil {
 		sendHttpError(resp, err, http.StatusBadRequest)
 		return
