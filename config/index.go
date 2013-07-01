@@ -87,9 +87,6 @@ func (iBlock *indexBlock) get(
 }
 
 func (iBlock *indexBlock) delete(key string) error {
-	if iBlock.count == 0 {
-		return nil
-	}
 	indexRecPtr, err := iBlock.find(key)
 	if err != nil {
 		return err
