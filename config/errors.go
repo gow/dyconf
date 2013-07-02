@@ -1,5 +1,9 @@
 package config
 
+import (
+	"encoding/json"
+)
+
 const (
 	ERR_INDEX_FULL              = 2001
 	ERR_INDEX_KEY_NOT_FOUND     = 2002
@@ -29,4 +33,15 @@ func (e Error) ErrorString() string {
 		errString = "key is either inactive or deleted"
 	}
 	return errString + ". " + e.ErrInfo
+}
+
+func (err Error) MarshalJSON() ([]byte, error) {
+	val := struct {
+		ErrNo  int
+		ErrMsg string
+	}{
+		err.ErrNo,
+		err.ErrorString(),
+	}
+	return json.Marshal(val)
 }

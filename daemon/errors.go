@@ -1,7 +1,7 @@
 package main
 
 import (
-//"github.com/gow/otfc/config"
+	"encoding/json"
 )
 
 const (
@@ -20,4 +20,15 @@ func (e Error) ErrorString() string {
 		return "Invalid value"
 	}
 	return errString + ". " + e.ErrInfo
+}
+
+func (err *Error) MarshalJSON() ([]byte, error) {
+	val := struct {
+		ErrNo  int
+		ErrMsg string
+	}{
+		err.ErrNo,
+		err.ErrorString(),
+	}
+	return json.Marshal(val)
 }

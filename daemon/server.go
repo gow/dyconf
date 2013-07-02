@@ -48,7 +48,7 @@ func (server *httpServer) httpCallbackGet(
 	key := req.URL.Query().Get("key")
 	value, err := server.configPtr.Get(key)
 	if err != nil {
-		sendHttpError(resp, err, http.StatusBadRequest)
+		sendHttpError(resp, err.(config.Error), http.StatusBadRequest)
 		return
 	}
 	sendHttpJSONResponse(
@@ -70,7 +70,7 @@ func (server *httpServer) httpCallbackSet(
 	if value == "" {
 		sendHttpError(
 			resp,
-			Error{ErrNo: ERR_DMN_INVALID_VALUE},
+			config.Error{ErrNo: ERR_DMN_INVALID_VALUE},
 			http.StatusNotAcceptable)
 		return
 	}
@@ -96,7 +96,7 @@ func (server *httpServer) httpCallbackDelete(
 	err := server.configPtr.Delete(key)
 	log.Println("httpCallbackDelete [key, err]: ", key, err)
 	if err != nil {
-		sendHttpError(resp, err, http.StatusBadRequest)
+		sendHttpError(resp, err.(config.Error), http.StatusBadRequest)
 		return
 	}
 	sendHttpJSONResponse(
@@ -107,13 +107,13 @@ func (server *httpServer) httpCallbackDelete(
 		}{"OK", key})
 }
 
-func sendHttpError(w http.ResponseWriter, err interface{}, errCode int) {
+func sendHttpError(w http.ResponseWriter, err config.Error, errCode int) {
 	response := struct {
 		Status string
-		Err    interface{}
+		Err    config.Error
 	}{"error", err}
 	jsonResponse, _ := json.Marshal(response)
-	http.Error(w, string(jsonResponse)+"\n", errCode)
+	http.Error(w, string(jsonResponse), errCode)
 }
 
 func sendHttpJSONResponse(w http.ResponseWriter, data interface{}) {
