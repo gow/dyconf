@@ -136,11 +136,7 @@ func TestOTFCEmptyGet(t *testing.T) {
 	Init(confFile)
 	defer Shutdown()
 	retrivedValue, err := Get(testKey)
-	if err == nil {
-		t.Errorf("Expected error; but none received")
-	} else {
-		expectConfigError(t, config.ERR_INDEX_KEY_NOT_FOUND, err)
-	}
+	expectConfigError(t, config.ERR_INDEX_KEY_NOT_FOUND, err)
 	if retrivedValue != nil {
 		t.Errorf("Value received for non-existant key. key: [%s], value [%x]",
 			testKey,
@@ -164,11 +160,7 @@ func TestOTFCDoubleSets(t *testing.T) {
 		return
 	}
 	err := Set(testKey, randomValue2)
-	if err == nil {
-		t.Errorf("Expected an error; but none received")
-	} else {
-		expectConfigError(t, config.ERR_CONFIG_SET_EXISTING_KEY, err)
-	}
+	expectConfigError(t, config.ERR_CONFIG_SET_EXISTING_KEY, err)
 	return
 }
 
@@ -210,11 +202,7 @@ func TestOTFCMaxIndexCapacity(t *testing.T) {
 
 		overflowAttempts--
 		err := Set(key, val)
-		if err == nil {
-			t.Errorf("Expected error; but none received")
-		} else {
-			expectConfigError(t, config.ERR_INDEX_FULL, err)
-		}
+		expectConfigError(t, config.ERR_INDEX_FULL, err)
 	}
 }
 
@@ -233,11 +221,7 @@ func TestOTFCEmptyDelete(t *testing.T) {
 	defer Shutdown()
 
 	err := Delete(key)
-	if err != nil {
-		Print()
-		t.Errorf("Expected no errors; but received [%s]", err)
-		return
-	}
+	expectConfigError(t, config.ERR_INDEX_KEY_NOT_FOUND, err)
 }
 
 // Tests the deletion on non existing keys
@@ -277,6 +261,9 @@ func randomize() {
 	log.Printf("Random seed value: [%d]", seedVal)
 }
 func expectConfigError(t *testing.T, errNo int, err error) bool {
+	if err == nil {
+		t.Errorf("Expected error; but none received")
+	}
 	if configError, ok := err.(config.Error); ok {
 		if configError.ErrNo == errNo {
 			return true
