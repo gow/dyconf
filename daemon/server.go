@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"github.com/gow/otfc/config"
 	"log"
+	"net"
 	"net/http"
+	"sync"
+	"time"
 )
 
 const (
@@ -14,31 +17,59 @@ const (
 
 type httpServer struct {
 	configPtr *config.ConfigFile
+	listener  net.Listener
+	mutex     sync.Mutex
 }
 
-func (server *httpServer) start() error {
+func (server *httpServer) start() (err error) {
+	// Setup handler functions
 	http.HandleFunc(
 		"/set",
 		func(w http.ResponseWriter, r *http.Request) {
+			server.mutex.Lock()
+			defer server.mutex.Unlock()
 			server.httpCallbackSet(w, r)
 		})
 	http.HandleFunc(
 		"/get",
 		func(w http.ResponseWriter, r *http.Request) {
+			server.mutex.Lock()
+			defer server.mutex.Unlock()
 			server.httpCallbackGet(w, r)
 		})
 	http.HandleFunc(
 		"/delete",
 		func(w http.ResponseWriter, r *http.Request) {
-			log.Println(server)
-			log.Println("Handling delete request")
+			server.mutex.Lock()
+			defer server.mutex.Unlock()
 			server.httpCallbackDelete(w, r)
 		})
-	err := http.ListenAndServe(":"+HTTP_PORT, nil)
+	// Open TCP port
+	server.listener, err = net.Listen("tcp", ":"+HTTP_PORT)
+	if err != nil {
+		return err
+	}
+
+	// Create a HTTP server
+	s := &http.Server{
+		Addr:           ":" + HTTP_PORT,
+		Handler:        nil,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 0,
+	}
+	go s.Serve(server.listener)
 	if err != nil {
 		return err
 	}
 	return err
+}
+
+func (server *httpServer) stop() error {
+	log.Println("Stopping the server")
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	return server.listener.Close()
 }
 
 func (server *httpServer) httpCallbackGet(
