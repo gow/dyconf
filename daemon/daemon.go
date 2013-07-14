@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-type otfcDaemon struct {
+type dyconfDaemon struct {
 	configPtr  *config.ConfigFile
 	configMmap []byte
 	server     *httpServer
 	cmdChannel chan string
 }
 
-func (daemon *otfcDaemon) init(fileName string) (err error) {
+func (daemon *dyconfDaemon) init(fileName string) (err error) {
 	daemon.configPtr, daemon.configMmap, err = config.NewWritable(fileName)
 	if err != nil {
 		return err
@@ -37,6 +37,6 @@ LOOP:
 	return err
 }
 
-func (daemon *otfcDaemon) stop() {
+func (daemon *dyconfDaemon) stop() {
 	daemon.cmdChannel <- "STOP"
 }

@@ -14,7 +14,7 @@ func main() {
 	flag.Parse()
 
 	log.Println(*updateMethod)
-	daemon := new(otfcDaemon)
+	daemon := new(dyconfDaemon)
 	err := daemon.init("/tmp/qwerty1234")
 	if err != nil {
 		log.Fatal(err)
