@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gow/otfc/config"
+	"github.com/gow/dyconf/config"
 	"log"
 	"net"
 	"net/http"

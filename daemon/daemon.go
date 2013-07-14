@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/gow/otfc/config"
+	"github.com/gow/dyconf/config"
 	"log"
 	"time"
 )
