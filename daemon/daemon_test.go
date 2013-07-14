@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -20,6 +21,8 @@ type daemonTestCase struct {
 	finalResponse   string
 }
 
+// Each test case contains a sequence of requests and the expected response for
+// the final request.
 var testCases = []daemonTestCase{
 	// Empty get
 	{
@@ -27,13 +30,10 @@ var testCases = []daemonTestCase{
 		`{"Status":"error","Err":{"ErrNo":2002,"ErrMsg":"index key not found. key [123]"}}`,
 	},
 	// Set
-	// TODO: Fix "panic: http: multiple registrations for /set" error
-	/*
-	  {
-	    []testRequest{{"set", "qqq", "QWErty~~!!"}},
-	    `{"Status":"OK","Key":"qqq","Value":"QWErty~~!!"}`,
-	  },
-	*/
+	{
+		[]testRequest{{"set", "qqq", "QWErty~~!!"}},
+		`{"Status":"OK","Key":"qqq","Value":"QWErty~~!!"}`,
+	},
 }
 
 func TestDaemon(t *testing.T) {
@@ -45,19 +45,22 @@ func TestDaemon(t *testing.T) {
 
 // Runs a single test case. Starts and stops a temp daemon.
 func runTestCase(tc daemonTestCase, t *testing.T) {
+	fmt.Printf("Running test case: %v\n", tc)
 	//initialize a daemon
 	daemon := new(dyconfDaemon)
 	go daemon.init("/tmp/qwerty1234")
-	/*
-	   if err != nil {
-	     t.Errorf("Failed to initialize the daemon. Err: [%v]\n", err)
-	     return
-	   }
-	*/
 	defer daemon.stop()
+	// We need to re-initialize the DefaultServeMux before next testcase.
+	// This is to avoid the ["panic: http: multiple registrations for /<path>"]
+	// errors caused by the new daemon server trying to register handles that
+	// were registered by the daemons server in previous test case.
+	defer func() { http.DefaultServeMux = http.NewServeMux() }()
 
-	// Run the test case after about a sec
-	<-time.After(time.Second * 1)
+	// Give enough time for the daemon to initialize. Unfortunately, this also
+	// means that each testcase will take a minimum of this much time.
+	<-time.After(time.Millisecond * 500)
+
+	// Run the test case
 	finalResp, err := sendRequests(tc.requestSequence)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -68,20 +71,22 @@ func runTestCase(tc daemonTestCase, t *testing.T) {
 				"Request Sequence:\n%v\n"+
 				"Expected final response: [%s]\n"+
 				"Received final response: [%s]\n"+
-				"Expected final response: [%v]\n"+
-				"Received final response: [%v]\n"+
-				"Length expected: [%d], Length received: [%d]",
+				"Length expected: [%d]\n"+
+				"Length received: [%d]\n"+
+				"Expected final response (bytes): [%v]\n"+
+				"Received final response (bytes): [%v]\n",
 			tc.requestSequence,
 			tc.finalResponse,
 			finalResp,
-			[]byte(tc.finalResponse),
-			[]byte(finalResp),
 			len(tc.finalResponse),
 			len(finalResp),
+			[]byte(tc.finalResponse),
+			[]byte(finalResp),
 		)
 	}
 }
 
+// Sends a sequence of requests and returns the response from the last request.
 func sendRequests(requests []testRequest) (string, error) {
 	var finalResp string
 	for _, request := range requests {
@@ -94,6 +99,7 @@ func sendRequests(requests []testRequest) (string, error) {
 	return strings.TrimSpace(finalResp), nil
 }
 
+// Sends a single request and returns the body of the response.
 func sendSingleRequest(request testRequest) ([]byte, error) {
 	reqURL, err := url.Parse("http://localhost:8088/")
 	if err != nil {
