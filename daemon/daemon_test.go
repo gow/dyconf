@@ -34,6 +34,27 @@ var testCases = []daemonTestCase{
 		[]testRequest{{"set", "qqq", "QWErty~~!!"}},
 		`{"Status":"OK","Key":"qqq","Value":"QWErty~~!!"}`,
 	},
+	// Empty Delete
+	{
+		[]testRequest{{"delete", "test_key", ""}},
+		`{"Status":"error","Err":{"ErrNo":2002,"ErrMsg":"index key not found. key [test_key]"}}`,
+	},
+	// Set & Get
+	{
+		[]testRequest{
+			{"set", "test_key", "test_value"},
+			{"get", "test_key", ""},
+		},
+		`{"Status":"OK","Key":"test_key","Value":"dGVzdF92YWx1ZQ=="}`,
+	},
+	// Overwrite
+	{
+		[]testRequest{
+			{"set", "test_key", "test_value"},
+			{"set", "test_key", "test_value"},
+		},
+		`{"ErrNo":1004,"ErrMsg":"key already exists. Use overwrite() to overwrite it. key [test_key]"}`,
+	},
 }
 
 func TestDaemon(t *testing.T) {
