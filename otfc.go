@@ -1,7 +1,7 @@
 package otfc
 
 import (
-	"github.com/gow/otfc/config"
+	"github.com/gow/dyconf/config"
 	"log"
 	"syscall"
 )

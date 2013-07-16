@@ -1,15 +1,18 @@
 package config
 
-import (
-	"encoding/json"
-)
-
 const (
 	ERR_INDEX_FULL              = 2001
 	ERR_INDEX_KEY_NOT_FOUND     = 2002
 	ERR_INDEX_INACTIVE          = 2003
 	ERR_CONFIG_SET_EXISTING_KEY = 1004
 )
+
+type ErrorIface interface {
+  GetErrorNo() int
+  GetErrorString() string
+  //MarshalJSON() ([]byte, error)
+  Error() string
+}
 
 type Error struct {
 	ErrNo   int    // Error Number
@@ -18,6 +21,13 @@ type Error struct {
 
 func (e Error) Error() string {
 	return "Error: " + e.ErrorString()
+}
+
+func (e Error) GetErrorNo() int {
+  return e.ErrNo
+}
+func (e Error) GetErrorString() string {
+  return e.ErrorString()
 }
 
 func (e Error) ErrorString() string {
@@ -33,15 +43,4 @@ func (e Error) ErrorString() string {
 		errString = "key is either inactive or deleted"
 	}
 	return errString + ". " + e.ErrInfo
-}
-
-func (err Error) MarshalJSON() ([]byte, error) {
-	val := struct {
-		ErrNo  int
-		ErrMsg string
-	}{
-		err.ErrNo,
-		err.ErrorString(),
-	}
-	return json.Marshal(val)
 }

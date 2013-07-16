@@ -2,7 +2,7 @@ package otfc
 
 import (
 	"bytes"
-	"github.com/gow/otfc/config"
+	"github.com/gow/dyconf/config"
 	"log"
 	"math/rand"
 	"os"

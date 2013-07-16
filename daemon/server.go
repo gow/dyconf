@@ -107,7 +107,7 @@ func (server *httpServer) httpCallbackSet(
 	}
 	err := server.configPtr.Set(key, []byte(value))
 	if err != nil {
-		sendHttpJSONResponse(resp, err)
+		sendHttpError(resp, err.(config.ErrorIface), http.StatusBadRequest)
 		return
 	}
 	sendHttpJSONResponse(
@@ -138,11 +138,15 @@ func (server *httpServer) httpCallbackDelete(
 		}{"OK", key})
 }
 
-func sendHttpError(w http.ResponseWriter, err config.Error, errCode int) {
+func sendHttpError(w http.ResponseWriter, err config.ErrorIface, errCode int) {
+  type errorDetails struct {
+      ErrNo int
+      ErrMsg string
+  }
 	response := struct {
 		Status string
-		Err    config.Error
-	}{"error", err}
+		Err    errorDetails
+	}{"error", errorDetails{err.GetErrorNo(), err.GetErrorString()}}
 	jsonResponse, _ := json.Marshal(response)
 	http.Error(w, string(jsonResponse), errCode)
 }

@@ -53,7 +53,7 @@ var testCases = []daemonTestCase{
 			{"set", "test_key", "test_value"},
 			{"set", "test_key", "test_value"},
 		},
-		`{"ErrNo":1004,"ErrMsg":"key already exists. Use overwrite() to overwrite it. key [test_key]"}`,
+		`{"Status":"error","Err":{"ErrNo":1004,"ErrMsg":"key already exists. Use overwrite() to overwrite it. key [test_key]"}}`,
 	},
 }
 
