@@ -39,6 +39,16 @@ var testCases = []daemonTestCase{
 		[]testRequest{{"delete", "test_key", ""}},
 		`{"Status":"error","Err":{"ErrNo":2002,"ErrMsg":"index key not found. key [test_key]"}}`,
 	},
+	// Invalid Key
+	{
+		[]testRequest{{"set", "", "test_value"}},
+		`{"Status":"error","Err":{"ErrNo":6001,"ErrMsg":"Invalid key. Key: [], value:[test_value]"}}`,
+	},
+	// Invalid Value
+	{
+		[]testRequest{{"set", "test_key", ""}},
+		`{"Status":"error","Err":{"ErrNo":6002,"ErrMsg":"Invalid value. Key: [test_key], value:[]"}}`,
+	},
 	// Set & Get
 	{
 		[]testRequest{
@@ -79,7 +89,7 @@ func runTestCase(tc daemonTestCase, t *testing.T) {
 
 	// Give enough time for the daemon to initialize. Unfortunately, this also
 	// means that each testcase will take a minimum of this much time.
-	<-time.After(time.Millisecond * 500)
+	<-time.After(time.Millisecond * 100)
 
 	// Run the test case
 	finalResp, err := sendRequests(tc.requestSequence)

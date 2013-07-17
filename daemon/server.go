@@ -98,10 +98,17 @@ func (server *httpServer) httpCallbackSet(
 	key := req.URL.Query().Get("key")
 	value := req.URL.Query().Get("value")
 	log.Println("Key: ", key, "Value: ", value)
-	if value == "" {
+	if key == "" || value == "" {
+		errNo := ERR_DMN_INVALID_VALUE
+		if key == "" {
+			errNo = ERR_DMN_INVALID_KEY
+		}
 		sendHttpError(
 			resp,
-			config.Error{ErrNo: ERR_DMN_INVALID_VALUE},
+			Error{
+				ErrNo:   errNo,
+				ErrInfo: fmt.Sprintf("Key: [%s], value:[%s]", key, value),
+			},
 			http.StatusNotAcceptable)
 		return
 	}
@@ -139,10 +146,10 @@ func (server *httpServer) httpCallbackDelete(
 }
 
 func sendHttpError(w http.ResponseWriter, err config.ErrorIface, errCode int) {
-  type errorDetails struct {
-      ErrNo int
-      ErrMsg string
-  }
+	type errorDetails struct {
+		ErrNo  int
+		ErrMsg string
+	}
 	response := struct {
 		Status string
 		Err    errorDetails

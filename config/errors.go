@@ -10,7 +10,6 @@ const (
 type ErrorIface interface {
   GetErrorNo() int
   GetErrorString() string
-  //MarshalJSON() ([]byte, error)
   Error() string
 }
 

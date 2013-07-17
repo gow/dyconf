@@ -34,7 +34,7 @@ LOOP:
 			}
 		}
 	}
-	return err
+	return daemon.server.stop()
 }
 
 func (daemon *dyconfDaemon) stop() {

@@ -1,11 +1,8 @@
 package main
 
-import (
-	"encoding/json"
-)
-
 const (
-	ERR_DMN_INVALID_VALUE = 6001
+	ERR_DMN_INVALID_KEY   = 6001
+	ERR_DMN_INVALID_VALUE = 6002
 )
 
 type Error struct {
@@ -13,22 +10,21 @@ type Error struct {
 	ErrInfo string // Additional error info
 }
 
-func (e Error) ErrorString() string {
+func (e Error) Error() string {
+	return "Error: " + e.GetErrorString()
+}
+
+func (e Error) GetErrorString() string {
 	errString := "Unknown Error"
 	switch e.ErrNo {
+	case ERR_DMN_INVALID_KEY:
+		errString = "Invalid key"
 	case ERR_DMN_INVALID_VALUE:
-		return "Invalid value"
+		errString = "Invalid value"
 	}
 	return errString + ". " + e.ErrInfo
 }
 
-func (err *Error) MarshalJSON() ([]byte, error) {
-	val := struct {
-		ErrNo  int
-		ErrMsg string
-	}{
-		err.ErrNo,
-		err.ErrorString(),
-	}
-	return json.Marshal(val)
+func (e Error) GetErrorNo() int {
+	return e.ErrNo
 }
