@@ -1,4 +1,5 @@
-otfc
+DyConf
 ====
 
-On the fly config daemon written in go
+A dynamic configuration tool written in go.
+Will add more details here.
