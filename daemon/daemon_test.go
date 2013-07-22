@@ -57,6 +57,14 @@ var testCases = []daemonTestCase{
 		},
 		`{"Status":"OK","Key":"test_key","Value":"dGVzdF92YWx1ZQ=="}`,
 	},
+	// Set & Delete
+	{
+		[]testRequest{
+			{"set", "test_key", "test_value"},
+			{"delete", "test_key", ""},
+		},
+		`{"Status":"OK","Key":"test_key"}`,
+	},
 	// Overwrite
 	{
 		[]testRequest{
