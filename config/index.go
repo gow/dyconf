@@ -43,9 +43,6 @@ func (rec indexRecord) print() {
 
 func (iBlock *indexBlock) print() {
 	log.Printf("Total Index count: [%d]\n", iBlock.count)
-	//for i := uint32(0); i < iBlock.count; i++ {
-	//iBlock.indices[i].print()
-	//}
 }
 
 func (iBlock *indexBlock) set(
@@ -91,10 +88,10 @@ func (iBlock *indexBlock) delete(key string) error {
 	if err != nil {
 		return err
 	}
-	if indexRecPtr.status != INDEX_REC_STATUS_ACTIVE {
-		indexRecPtr.status = INDEX_REC_STATUS_DELETED
-		iBlock.count--
-	}
+	// Copy the last element to the current position.
+	*indexRecPtr = iBlock.indices[iBlock.count-1]
+	// Reduce the index count by one now.
+	iBlock.count--
 	return nil
 }
 

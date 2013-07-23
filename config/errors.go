@@ -8,9 +8,9 @@ const (
 )
 
 type ErrorIface interface {
-  GetErrorNo() int
-  GetErrorString() string
-  Error() string
+	GetErrorNo() int
+	GetErrorString() string
+	Error() string
 }
 
 type Error struct {
@@ -23,10 +23,10 @@ func (e Error) Error() string {
 }
 
 func (e Error) GetErrorNo() int {
-  return e.ErrNo
+	return e.ErrNo
 }
 func (e Error) GetErrorString() string {
-  return e.ErrorString()
+	return e.ErrorString()
 }
 
 func (e Error) ErrorString() string {
