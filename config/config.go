@@ -1,8 +1,10 @@
 package config
 
 import (
+	"crypto/md5"
 	"errors"
 	"fmt"
+	"sort"
 	"syscall"
 	"unsafe"
 )
@@ -102,6 +104,31 @@ func (configPtr *ConfigFile) Get(key string) (value []byte, err error) {
 	return configPtr.data.get(offset, length)
 }
 
+// Gets the value for the given config.IndexKey
+func (configPtr *ConfigFile) getFromIndexKey(key IndexKey) (value []byte, err error) {
+	offset, length, err := configPtr.index.getFromIndexKey(key)
+	if err != nil {
+		return
+	}
+	return configPtr.data.get(offset, length)
+}
+
 func (configPtr *ConfigFile) Delete(key string) error {
 	return configPtr.index.delete(key)
+}
+
+// Returns the MD5 hash string of all the contents int the config file
+func (configPtr *ConfigFile) GetChecksum() string {
+	keyHashes := configPtr.index.getAllIndexKeys()
+	sort.Sort(keyHashes)
+	h := md5.New()
+	for _, key := range keyHashes {
+		val, err := configPtr.getFromIndexKey(key)
+		if err != nil {
+			continue
+		}
+		h.Write(key[:])
+		h.Write(val)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

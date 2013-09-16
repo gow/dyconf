@@ -23,9 +23,32 @@ type indexMetaData struct {
 	padding [28]byte
 }
 
+type IndexKey [16]byte
+type IndexKeySlice []IndexKey
+
+// sort.Interface functions
+func (keySlice IndexKeySlice) Len() int {
+	return len(keySlice)
+}
+func (keySlice IndexKeySlice) Less(i, j int) bool {
+	var keyA = keySlice[i]
+	var keyB = keySlice[j]
+	for index := 0; index < 16; index++ {
+		if keyA[index] < keyB[index] {
+			return true
+		} else {
+			return false
+		}
+	}
+	return true
+}
+func (keySlice IndexKeySlice) Swap(i, j int) {
+	keySlice[i], keySlice[j] = keySlice[j], keySlice[i]
+}
+
 // Represents an index record. The offset
 type indexRecord struct {
-	key        [16]byte //md5 hash of the config key
+	key        IndexKey //md5 hash of the config key
 	dataOffset uint32
 	dataLength uint32
 	status     byte
@@ -58,7 +81,7 @@ func (iBlock *indexBlock) set(
 	// Add the new index record at the end.
 	rec := &(iBlock.indices[iBlock.count])
 
-	keyHash := getKeyHash(key)
+	keyHash := getIndexKey(key)
 	rec.key = keyHash
 	rec.dataOffset = offset
 	rec.dataLength = length
@@ -68,8 +91,17 @@ func (iBlock *indexBlock) set(
 	return nil
 }
 
+// Returns the offset & length of the data corresponding to the given Key (string)
 func (iBlock *indexBlock) get(
 	key string) (offset uint32, length uint32, err error) {
+	indexKey := getIndexKey(key)
+	return iBlock.getFromIndexKey(indexKey)
+}
+
+// Returns the offset & length of the data corresponding to the given IndexKey
+func (iBlock *indexBlock) getFromIndexKey(
+	key IndexKey) (offset uint32, length uint32, err error) {
+
 	indexRec, err := iBlock.find(key)
 	if err != nil {
 		return
@@ -83,8 +115,21 @@ func (iBlock *indexBlock) get(
 	return indexRec.dataOffset, indexRec.dataLength, nil
 }
 
+// Returns all IndexKeys that are currently active.
+func (iBlock *indexBlock) getAllIndexKeys() IndexKeySlice {
+	var keys IndexKeySlice
+	for i := uint32(0); i < iBlock.count; i++ {
+		indexRecPtr := &(iBlock.indices[i])
+		if indexRecPtr.status == INDEX_REC_STATUS_ACTIVE {
+			keys = append(keys, indexRecPtr.key)
+		}
+	}
+	return keys
+}
+
 func (iBlock *indexBlock) delete(key string) error {
-	indexRecPtr, err := iBlock.find(key)
+	indexKey := getIndexKey(key)
+	indexRecPtr, err := iBlock.find(indexKey)
 	if err != nil {
 		return err
 	}
@@ -95,18 +140,19 @@ func (iBlock *indexBlock) delete(key string) error {
 	return nil
 }
 
-func (iBlock *indexBlock) find(key string) (*indexRecord, error) {
-	inputKeyHash := getKeyHash(key)
+// Finds the indexRecord corresponding to the IndexKey
+func (iBlock *indexBlock) find(key IndexKey) (*indexRecord, error) {
 	for i := uint32(0); i < iBlock.count; i++ {
 		indexRecPtr := &(iBlock.indices[i])
-		if indexRecPtr.key == inputKeyHash {
+		if indexRecPtr.key == key {
 			return indexRecPtr, nil
 		}
 	}
 	return nil, Error{ERR_INDEX_KEY_NOT_FOUND, fmt.Sprintf("key [%s]", key)}
 }
 
-func getKeyHash(key string) (ret [16]byte) {
+// Returns the IndexKey from key string
+func getIndexKey(key string) (ret IndexKey) {
 	// md5 the key
 	h := md5.New()
 	h.Write([]byte(key))
