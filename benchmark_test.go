@@ -52,10 +52,10 @@ func BenchmarkRPCReads(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		defer c.Close()
 		args := &Args{9, 2}
 		var mul int64
 		err = c.Call("Arith.Mul", args, &mul)
+		c.Close()
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -98,8 +98,9 @@ func setupRPCServer() (net.Listener, error) {
 			if err != nil {
 				//panic(err)
 				break
+			} else {
+				go rs.ServeConn(conn)
 			}
-			go rs.ServeConn(conn)
 		}
 	}()
 	return l, nil
