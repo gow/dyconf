@@ -1,4 +1,4 @@
-package otfc
+package dyconf
 
 import (
 	"errors"
