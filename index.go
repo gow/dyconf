@@ -12,39 +12,55 @@ const (
 	sizeOfUint32     = 4
 )
 
-type dataPtr uint32
+type dataOffset uint32
 
 type index interface {
-	get(key string) (dataPtr, error)
-	set(key string, ptr dataPtr) error
+	get(key string) (dataOffset, error)
+	set(key string, offset dataOffset) error
 }
 
 type indexBlock struct {
-	size uint32 // current size of the index.
-	data []byte // Index data block
+	count uint32 // current size of the index.
+	data  []byte // Index data block
 }
 
-func (i *indexBlock) get(key string) (dataPtr, error) {
+func (i *indexBlock) get(key string) (dataOffset, error) {
 	h, err := defaultHashFunc(key)
 	if err != nil {
 		return 0, err
 	}
-	index := (h % i.size) * sizeOfUint32
+	index := (h % i.count) * sizeOfUint32
 	// These 4 bytes represent the pointer in data block.
 	ptrBytes := i.data[index:(index + sizeOfUint32)]
 
 	// Convert from bytes to data block pointer offset.
-	var ptr dataPtr
+	var offset dataOffset
 	buf := bytes.NewReader(ptrBytes)
-	err = binary.Read(buf, binary.LittleEndian, &ptr)
+	err = binary.Read(buf, binary.LittleEndian, &offset)
 	if err != nil {
 		return 0, fmt.Errorf("error in reading index: %s", err)
 	}
-	return ptr, nil
+	return offset, nil
 }
 
-func (i *indexBlock) set(key string, ptr dataPtr) error {
-	panic("Implement me!")
+func (i *indexBlock) set(key string, offset dataOffset) error {
+	// compute index offset.
+	h, err := defaultHashFunc(key)
+	if err != nil {
+		return err
+	}
+	index := (h % i.count) * sizeOfUint32
+	offsetBytes := i.data[index:(index + sizeOfUint32)]
+
+	// Conver the offset into little-endian byte ordering.
+	buf := &bytes.Buffer{}
+	err = binary.Write(buf, binary.LittleEndian, offset)
+	if err != nil {
+		return err
+	}
+
+	// save at offsetBytes
+	copy(offsetBytes, buf.Bytes())
 	return nil
 }
 
