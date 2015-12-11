@@ -27,44 +27,63 @@ type record interface {
 }
 
 type dataRecord struct {
-	totalSize uint32
-	keySize   uint16
-	dataSize  uint32
-	key       []byte
-	data      []byte
-	next      dataOffset
+	key  []byte
+	data []byte
+	next dataOffset
+}
+
+type writeBuffer struct {
+	err  error
+	wPtr int
+	buf  []byte
+}
+
+func (b *writeBuffer) Write(data []byte) (int, error) {
+	// Return if there was any previous error.
+	if b.err != nil {
+		return 0, b.err
+	}
+
+	l := len(data)
+	if l == 0 { // Early return.
+		return 0, nil
+	}
+
+	c := copy(b.buf[b.wPtr:], data)
+	b.wPtr += c
+
+	if c != l {
+		b.err = fmt.Errorf("copied [%d] of [%d] bytes. Data: [% x]", c, l, data)
+	}
+	return c, b.err
 }
 
 func (r *dataRecord) read(block []byte) error {
 	buf := bytes.NewReader(block)
 
-	// Read Total size.
-	err := binary.Read(buf, binary.LittleEndian, &r.totalSize)
-	if err != nil {
-		return stackerr.Wrap(err)
-	}
-
 	// read key size.
-	err = binary.Read(buf, binary.LittleEndian, &r.keySize)
+	var keySize uint32
+	err := binary.Read(buf, binary.LittleEndian, &keySize)
 	if err != nil {
 		return stackerr.Wrap(err)
 	}
 
-	// read data size
-	err = binary.Read(buf, binary.LittleEndian, &r.dataSize)
+	// read data size.
+	var dataSize uint32
+	err = binary.Read(buf, binary.LittleEndian, &dataSize)
 	if err != nil {
 		return stackerr.Wrap(err)
 	}
 
 	// allocate key and then read into it.
-	r.key = make([]byte, r.keySize)
+	r.key = make([]byte, keySize)
 	err = binary.Read(buf, binary.LittleEndian, &r.key)
 	if err != nil {
 		return stackerr.Wrap(err)
 	}
 
 	// allocate data and then read into it.
-	r.data = make([]byte, r.dataSize)
+	r.data = make([]byte, dataSize)
 	err = binary.Read(buf, binary.LittleEndian, &r.data)
 	if err != nil {
 		return stackerr.Wrap(err)
@@ -79,79 +98,40 @@ func (r *dataRecord) read(block []byte) error {
 	return nil
 }
 
-func (r *dataRecord) bytes() ([]byte, error) {
-	buf := &bytes.Buffer{}
-	err := binary.Write(buf, binary.LittleEndian, r.size())
-	if err != nil {
-		return nil, stackerr.Wrap(err)
+func (r *dataRecord) write(block []byte) error {
+	if r.size() > uint32(len(block)) {
+		return stackerr.Newf("Unable to write the key [%s]. [%d] bytes available out of [%d] needed.", string(r.key), len(block), r.size())
 	}
+	buf := &writeBuffer{buf: block}
+	// Just write in one order. The error if any will be caught and cached in buf.Write
+	//binary.Write(buf, binary.LittleEndian, r.size())
+	binary.Write(buf, binary.LittleEndian, r.keySize())
+	binary.Write(buf, binary.LittleEndian, r.dataSize())
+	binary.Write(buf, binary.LittleEndian, r.key)
+	binary.Write(buf, binary.LittleEndian, r.data)
+	binary.Write(buf, binary.LittleEndian, r.next)
 
-	err = binary.Write(buf, binary.LittleEndian, r.keySize)
-	if err != nil {
-		return nil, stackerr.Wrap(err)
+	// Check if there any error in writing.
+	if buf.err != nil {
+		return stackerr.Newf("Unable to write the key [%s]. Total space needed: [%d]. Details: %s", string(r.key), r.size(), buf.err.Error())
 	}
-
-	err = binary.Write(buf, binary.LittleEndian, r.dataSize)
-	if err != nil {
-		return nil, stackerr.Wrap(err)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, r.key)
-	if err != nil {
-		return nil, stackerr.Wrap(err)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, r.data)
-	if err != nil {
-		return nil, stackerr.Wrap(err)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, r.next)
-	if err != nil {
-		return nil, stackerr.Wrap(err)
-	}
-
-	return buf.Bytes(), nil
+	return nil
 }
 
 func (r *dataRecord) size() uint32 {
-	if r.totalSize != 0 {
-		return r.totalSize
-	}
 	size := uint32(0)
-	size += sizeOfUint32        // totalSize field
-	size += sizeOfUint16        // keySize field
+	size += sizeOfUint32        // keySize field
 	size += sizeOfUint32        // dataSize field
 	size += uint32(len(r.key))  // key field
 	size += uint32(len(r.data)) // data field
 	size += sizeOfUint32        // next field
-	fmt.Println("Size is ", size)
 	return size
 }
 
-func (r *dataRecord) write(block []byte) error {
-	bytesToWrite, err := r.bytes()
-	if err != nil {
-		return stackerr.Wrap(err)
-	}
+func (r *dataRecord) keySize() uint32 {
+	return uint32(len(r.key))
+}
 
-	if len(block) < len(bytesToWrite) {
-		return stackerr.Newf(
-			"insufficient space. Unable to write the key [%s]. Total space needed: [%d]",
-			string(r.key),
-			r.totalSize,
-		)
-	}
-
-	// Write the serialized data into the block.
-	writtenCount := copy(block, bytesToWrite)
-	if writtenCount != len(bytesToWrite) {
-		return stackerr.Newf(
-			"write failed. Unable to write the key [%s]. Total space needed: [%d]",
-			string(r.key),
-			r.totalSize,
-		)
-	}
-
-	return nil
+func (r *dataRecord) dataSize() uint32 {
+	return uint32(len(r.data))
 }
