@@ -8,6 +8,107 @@ import (
 	"github.com/facebookgo/ensure"
 )
 
+const (
+	recordOverheadBytes = 12
+)
+
+// TestDataBlockSave tests succesful saving of key value pairs in a given data block.
+func TestDataBlockSave(t *testing.T) {
+	cases := []struct {
+		kvPairs       map[string][]byte
+		order         []string
+		expectedBlock []byte
+	}{
+		{ // Case-0:
+			kvPairs: map[string][]byte{"key": []byte("value")},
+			order:   []string{"key"},
+			expectedBlock: []byte{
+				0x03, 0x00, 0x00, 0x00, // key size (3)
+				0x05, 0x00, 0x00, 0x00, // data size (5)
+				0x6b, 0x65, 0x79, // Key (key)
+				0x76, 0x61, 0x6C, 0x75, 0x65, // data (value)
+				0x00, 0x00, 0x00, 0x00, // next (0)
+			},
+		},
+		{ // Case-1
+			kvPairs: map[string][]byte{
+				"key1": []byte("value1"),
+				"key2": []byte("value2"),
+				"key3": []byte("value3"),
+			},
+			order: []string{"key1", "key3", "key2"},
+			expectedBlock: []byte{
+				0x04, 0x00, 0x00, 0x00, // key size (4)
+				0x06, 0x00, 0x00, 0x00, // data size (6)
+				0x6b, 0x65, 0x79, 0x31, // key (key1)
+				0x76, 0x61, 0x6C, 0x75, 0x65, 0x31, // data (value1)
+				0x00, 0x00, 0x00, 0x00, // next (0)
+
+				0x04, 0x00, 0x00, 0x00, // key size (4)
+				0x06, 0x00, 0x00, 0x00, // data size (6)
+				0x6b, 0x65, 0x79, 0x33, // key (key1)
+				0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, // data (value1)
+				0x00, 0x00, 0x00, 0x00, // next (0)
+
+				0x04, 0x00, 0x00, 0x00, // key size (4)
+				0x06, 0x00, 0x00, 0x00, // data size (6)
+				0x6b, 0x65, 0x79, 0x32, // key (key1)
+				0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, // data (value1)
+				0x00, 0x00, 0x00, 0x00, // next (0)
+			},
+		},
+	}
+
+	for i, tc := range cases {
+		buf := make([]byte, len(tc.expectedBlock))
+		db := &dataBlock{block: buf}
+		for _, key := range tc.order {
+			val := tc.kvPairs[key]
+			_, err := db.save(key, val)
+			ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
+		}
+		ensure.DeepEqual(t, buf, tc.expectedBlock, fmt.Sprintf("Case: [%d]", i))
+	}
+}
+
+func TestDataBlockSaveErrors(t *testing.T) {
+	cases := []struct {
+		keys      []string
+		values    [][]byte
+		blockSize int
+	}{
+		{ // empty keys.
+			keys:      []string{""},
+			values:    [][]byte{[]byte("123")},
+			blockSize: 320,
+		},
+		{ // empty values.
+			keys:      []string{"key"},
+			values:    [][]byte{[]byte{}},
+			blockSize: 320,
+		},
+		{ // empty keys & values.
+			keys:      []string{"key1", "key2", "key3", "key4"},
+			values:    [][]byte{[]byte("val1"), []byte("val2"), []byte("val3"), []byte("val4")},
+			blockSize: 60,
+		},
+	}
+
+	for i, tc := range cases {
+		db := &dataBlock{block: make([]byte, tc.blockSize)}
+		for j, key := range tc.keys {
+			_, err := db.save(key, tc.values[j])
+			// expect an error only while saving the last record.
+			if j == len(tc.keys)-1 {
+				ensure.Err(t, err, regexp.MustCompile("(^Unable to write the key*|^dataBlock save failed*)"), fmt.Sprintf("Case: [%d]", i))
+			} else {
+				// Saving all other keys should not result in error.
+				ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
+			}
+		}
+	}
+}
+
 // TestDataRecordWrite tests succesfull writes into the given valid block.
 func TestDataRecordWrite(t *testing.T) {
 	cases := []struct {

@@ -15,9 +15,28 @@ type dataStore interface {
 }
 
 type dataBlock struct {
-	//maxDataBlockOffset dataOffset
 	writeOffset dataOffset
 	block       []byte
+}
+
+// save saves a new record and returns the offset where the record was saved.
+func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
+	if len(key) == 0 || len(data) == 0 {
+		return 0, stackerr.Newf("dataBlock save failed. key [%s] and data [% x] must be non-zero length", key, data)
+	}
+	r := &dataRecord{
+		key:  []byte(key),
+		data: data,
+	}
+	err := r.write(db.block[db.writeOffset:])
+	if err != nil {
+		return 0, err
+	}
+
+	// advance the write offset.
+	writtenOffset := db.writeOffset
+	db.writeOffset += dataOffset(r.size())
+	return writtenOffset, nil
 }
 
 type record interface {
@@ -30,32 +49,6 @@ type dataRecord struct {
 	key  []byte
 	data []byte
 	next dataOffset
-}
-
-type writeBuffer struct {
-	err  error
-	wPtr int
-	buf  []byte
-}
-
-func (b *writeBuffer) Write(data []byte) (int, error) {
-	// Return if there was any previous error.
-	if b.err != nil {
-		return 0, b.err
-	}
-
-	l := len(data)
-	if l == 0 { // Early return.
-		return 0, nil
-	}
-
-	c := copy(b.buf[b.wPtr:], data)
-	b.wPtr += c
-
-	if c != l {
-		b.err = fmt.Errorf("copied [%d] of [%d] bytes. Data: [% x]", c, l, data)
-	}
-	return c, b.err
 }
 
 func (r *dataRecord) read(block []byte) error {
@@ -100,7 +93,7 @@ func (r *dataRecord) read(block []byte) error {
 
 func (r *dataRecord) write(block []byte) error {
 	if r.size() > uint32(len(block)) {
-		return stackerr.Newf("Unable to write the key [%s]. [%d] bytes available out of [%d] needed.", string(r.key), len(block), r.size())
+		return stackerr.Newf("Unable to write the key [%s]. bytes available: [%d], needed: [%d].", string(r.key), len(block), r.size())
 	}
 	buf := &writeBuffer{buf: block}
 	// Just write in one order. The error if any will be caught and cached in buf.Write
@@ -134,4 +127,30 @@ func (r *dataRecord) keySize() uint32 {
 
 func (r *dataRecord) dataSize() uint32 {
 	return uint32(len(r.data))
+}
+
+type writeBuffer struct {
+	err  error
+	wPtr int
+	buf  []byte
+}
+
+func (b *writeBuffer) Write(data []byte) (int, error) {
+	// Return if there was any previous error.
+	if b.err != nil {
+		return 0, b.err
+	}
+
+	l := len(data)
+	if l == 0 { // Early return.
+		return 0, nil
+	}
+
+	c := copy(b.buf[b.wPtr:], data)
+	b.wPtr += c
+
+	if c != l {
+		b.err = fmt.Errorf("copied [%d] of [%d] bytes. Data: [% x]", c, l, data)
+	}
+	return c, b.err
 }
