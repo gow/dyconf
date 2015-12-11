@@ -65,34 +65,34 @@ func (r *dataRecord) read(block []byte) error {
 	var keySize uint32
 	err := binary.Read(buf, binary.LittleEndian, &keySize)
 	if err != nil {
-		return stackerr.Wrap(err)
+		return stackerr.Newf("dataRecord: failed to read the key size. error: [%s]", err.Error())
 	}
 
 	// read data size.
 	var dataSize uint32
 	err = binary.Read(buf, binary.LittleEndian, &dataSize)
 	if err != nil {
-		return stackerr.Wrap(err)
+		return stackerr.Newf("dataRecord: failed to read the data size. error: [%s]", err.Error())
 	}
 
 	// allocate key and then read into it.
 	r.key = make([]byte, keySize)
 	err = binary.Read(buf, binary.LittleEndian, &r.key)
 	if err != nil {
-		return stackerr.Wrap(err)
+		return stackerr.Newf("dataRecord: failed to read the key. error: [%s]", err.Error())
 	}
 
 	// allocate data and then read into it.
 	r.data = make([]byte, dataSize)
 	err = binary.Read(buf, binary.LittleEndian, &r.data)
 	if err != nil {
-		return stackerr.Wrap(err)
+		return stackerr.Newf("dataRecord: failed to read the data. error: [%s]", err.Error())
 	}
 
 	// Finally read the next pointer.
 	err = binary.Read(buf, binary.LittleEndian, &r.next)
 	if err != nil {
-		return stackerr.Wrap(err)
+		return stackerr.Newf("dataRecord: failed to read the next pointer. error: [%s]", err.Error())
 	}
 
 	return nil
