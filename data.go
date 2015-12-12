@@ -10,8 +10,8 @@ import (
 
 type dataStore interface {
 	save(key string, data []byte) (dataOffset, error)
-	update(offset dataOffset, key string, data []byte) error
-	fetch(offset dataOffset, key string) ([]byte, error)
+	update(start dataOffset, key string, data []byte) (dataOffset, error)
+	fetch(start dataOffset, key string) ([]byte, error)
 }
 
 type dataBlock struct {
@@ -37,6 +37,47 @@ func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
 	writtenOffset := db.writeOffset
 	db.writeOffset += dataOffset(r.size())
 	return writtenOffset, nil
+}
+
+func (db *dataBlock) fetch(start dataOffset, key string) ([]byte, error) {
+	rec, _, _, err := db.find(start, key)
+	if err != nil {
+		return nil, err
+	}
+
+	if rec != nil { // record was found.
+		return rec.data, nil
+	}
+
+	// record was not found.
+	return nil, stackerr.Newf("dataBlock: key [%s] was not found starting at [%x]", key, start)
+}
+
+func (db *dataBlock) find(start dataOffset, key string) (*dataRecord, dataOffset, dataOffset, error) {
+	prevOffset := dataOffset(0)
+	offset := start
+	rec := &dataRecord{}
+	err := rec.read(db.block[offset:])
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	if bytes.Equal(rec.key, []byte(key)) {
+		return rec, offset, prevOffset, nil
+	}
+
+	for rec.next != 0 {
+		prevOffset = offset
+		offset = rec.next
+		err = rec.read(db.block[offset:])
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		if bytes.Equal(rec.key, []byte(key)) {
+			return rec, offset, prevOffset, nil
+		}
+	}
+	// The data record was not found. This is not an error. Return a nil dataRecord but with the correct current offset and the previous offset. This is so that the caller can take additional action when the record was not found.
+	return nil, offset, prevOffset, nil
 }
 
 type record interface {

@@ -39,7 +39,7 @@ func BenchmarkSyncLockRead(b *testing.B) {
 /***************** RPC ********************/
 const hostStr = "localhost:0"
 
-func BenchmarkRPCReads(b *testing.B) {
+func BenchmarkRPCReadsWithNewConn(b *testing.B) {
 	l, err := setupRPCServer()
 	if err != nil {
 		b.Fatal(err)
@@ -56,6 +56,32 @@ func BenchmarkRPCReads(b *testing.B) {
 		var mul int64
 		err = c.Call("Arith.Mul", args, &mul)
 		c.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+		if mul != int64(args.A*args.B) {
+			b.Fatalf("Expected: %d, Received: %d", args.A*args.B, mul)
+		}
+	}
+}
+func BenchmarkRPCReadsWithExistConn(b *testing.B) {
+	l, err := setupRPCServer()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer l.Close()
+
+	c, err := rpc.Dial("tcp", l.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer c.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		args := &Args{9, 2}
+		var mul int64
+		err = c.Call("Arith.Mul", args, &mul)
 		if err != nil {
 			b.Fatal(err)
 		}
