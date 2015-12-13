@@ -5,7 +5,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookgo/stackerr"
+)
+
+const (
+	dataBlockHeaderSize = 0x10
 )
 
 type dataStore interface {
@@ -19,23 +24,27 @@ type dataBlock struct {
 	block       []byte
 }
 
+func (db *dataBlock) headerSize() dataOffset {
+	return sizeOfUint32 * 4 // reserve 16 bytes for header use.
+}
+
 // save saves a new record and returns the offset where the record was saved.
 func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
 	if len(key) == 0 || len(data) == 0 {
 		return 0, stackerr.Newf("dataBlock save failed. key [%s] and data [% x] must be non-zero length", key, data)
 	}
-	r := &dataRecord{
+	rec := &dataRecord{
 		key:  []byte(key),
 		data: data,
 	}
-	err := r.write(db.block[db.writeOffset:])
+	err := db.writeRecordTo(db.writeOffset, rec)
 	if err != nil {
 		return 0, err
 	}
 
 	// advance the write offset.
 	writtenOffset := db.writeOffset
-	db.writeOffset += dataOffset(r.size())
+	db.writeOffset += dataOffset(rec.size())
 	return writtenOffset, nil
 }
 
@@ -53,22 +62,64 @@ func (db *dataBlock) fetch(start dataOffset, key string) ([]byte, error) {
 	return nil, stackerr.Newf("dataBlock: key [%s] was not found starting at [%x]", key, start)
 }
 
+func (db *dataBlock) readRecordFrom(start dataOffset) (*dataRecord, error) {
+	if start < db.headerSize() {
+		return nil, stackerr.Newf(
+			"dataBlock: invalid start offset [%#v]. Offsets between [%#v - %#v] is reserved for data block header",
+			start,
+			0,
+			db.headerSize())
+	}
+	if start >= dataOffset(len(db.block)) {
+		return nil, stackerr.Newf("dataBlock: Cannot read out of bound offset [%#v]. Block size: [%#v]", start, dataOffset(len(db.block)))
+	}
+	return (&dataRecord{}).read(db.block[start:])
+}
+
+func (db *dataBlock) writeRecordTo(start dataOffset, rec *dataRecord) error {
+	if start < db.headerSize() {
+		return stackerr.Newf(
+			"dataBlock: invalid start offset [%#v]. Offsets between [%#v - %#v] is reserved for data block header",
+			start,
+			0,
+			db.headerSize())
+	}
+	if start >= dataOffset(len(db.block)) {
+		return stackerr.Newf("dataBlock: Cannot write to offset [%#v]. Block size: [%#v]", start, dataOffset(len(db.block)))
+	}
+
+	end := start + dataOffset(rec.size())
+	if end > dataOffset(len(db.block)) {
+		return stackerr.Newf(
+			"dataBlock: Cannot write to offset [%#v]. Record [%#v bytes] exceeds data block boundary [%#v]",
+			start,
+			rec.size(),
+			dataOffset(len(db.block)),
+		)
+	}
+	err := rec.write(db.block[start:end])
+	if err != nil {
+		return stackerr.Newf("dataBlock[NEW]: Cannot write to offset [%#v]. Block state: \n%s\n Err: [%s]", start, spew.Sdump(db.block), err.Error())
+	}
+	return nil
+}
+
 func (db *dataBlock) find(start dataOffset, key string) (*dataRecord, dataOffset, dataOffset, error) {
-	prevOffset := dataOffset(0)
 	offset := start
-	rec := &dataRecord{}
-	err := rec.read(db.block[offset:])
+	rec, err := db.readRecordFrom(offset)
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	// The first record in the linked list matched.
 	if bytes.Equal(rec.key, []byte(key)) {
-		return rec, offset, prevOffset, nil
+		return rec, offset, 0, nil // previous offset will be 0 in this case.
 	}
 
+	// Iterate over the rest of the list.
 	for rec.next != 0 {
-		prevOffset = offset
+		prevOffset := offset
 		offset = rec.next
-		err = rec.read(db.block[offset:])
+		rec, err = db.readRecordFrom(rec.next)
 		if err != nil {
 			return nil, 0, 0, err
 		}
@@ -76,12 +127,13 @@ func (db *dataBlock) find(start dataOffset, key string) (*dataRecord, dataOffset
 			return rec, offset, prevOffset, nil
 		}
 	}
-	// The data record was not found. This is not an error. Return a nil dataRecord but with the correct current offset and the previous offset. This is so that the caller can take additional action when the record was not found.
-	return nil, offset, prevOffset, nil
+	// The data record was not found. This is not an error. Return just a vald previous offset (the last record). This is so that the caller can take additional action when the record was not found.
+	prevOffset := offset
+	return nil, 0, prevOffset, nil
 }
 
 type record interface {
-	read([]byte) error
+	read([]byte) (*dataRecord, error)
 	write([]byte)
 	size() uint32
 }
@@ -92,44 +144,44 @@ type dataRecord struct {
 	next dataOffset
 }
 
-func (r *dataRecord) read(block []byte) error {
+func (r *dataRecord) read(block []byte) (*dataRecord, error) {
 	buf := bytes.NewReader(block)
 
 	// read key size.
 	var keySize uint32
 	err := binary.Read(buf, binary.LittleEndian, &keySize)
 	if err != nil {
-		return stackerr.Newf("dataRecord: failed to read the key size. error: [%s]", err.Error())
+		return nil, stackerr.Newf("dataRecord: failed to read the key size. error: [%s]", err.Error())
 	}
 
 	// read data size.
 	var dataSize uint32
 	err = binary.Read(buf, binary.LittleEndian, &dataSize)
 	if err != nil {
-		return stackerr.Newf("dataRecord: failed to read the data size. error: [%s]", err.Error())
+		return nil, stackerr.Newf("dataRecord: failed to read the data size. error: [%s]. Block: \n%s\n", err.Error(), spew.Sdump(block))
 	}
 
 	// allocate key and then read into it.
 	r.key = make([]byte, keySize)
 	err = binary.Read(buf, binary.LittleEndian, &r.key)
 	if err != nil {
-		return stackerr.Newf("dataRecord: failed to read the key. error: [%s]", err.Error())
+		return nil, stackerr.Newf("dataRecord: failed to read the key. error: [%s]. Block: \n%s\n", err.Error(), spew.Sdump(block))
 	}
 
 	// allocate data and then read into it.
 	r.data = make([]byte, dataSize)
 	err = binary.Read(buf, binary.LittleEndian, &r.data)
 	if err != nil {
-		return stackerr.Newf("dataRecord: failed to read the data. error: [%s]", err.Error())
+		return nil, stackerr.Newf("dataRecord: failed to read the data. error: [%s]. Block: \n%s\n", err.Error(), spew.Sdump(block))
 	}
 
 	// Finally read the next pointer.
 	err = binary.Read(buf, binary.LittleEndian, &r.next)
 	if err != nil {
-		return stackerr.Newf("dataRecord: failed to read the next pointer. error: [%s]", err.Error())
+		return nil, stackerr.Newf("dataRecord: failed to read the next pointer. error: [%s]. Block: \n%s\n", err.Error(), spew.Sdump(block))
 	}
 
-	return nil
+	return r, nil
 }
 
 func (r *dataRecord) write(block []byte) error {
