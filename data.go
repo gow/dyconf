@@ -132,6 +132,73 @@ func (db *dataBlock) find(start dataOffset, key string) (*dataRecord, dataOffset
 	return nil, 0, prevOffset, nil
 }
 
+func (db *dataBlock) update(start dataOffset, key string, data []byte) (dataOffset, error) {
+	rec, offset, prevOffset, err := db.find(start, key)
+	if err != nil {
+		return 0, err
+	}
+
+	// Case-1: The record is nil (not found). Just save a new record and adjust the previous record
+	// to point to the newly added record. There will always be a previous record.
+	if rec == nil {
+		offset, err := db.save(key, data)
+		if err != nil {
+			return 0, err
+		}
+		// There was a previous record. Fetch and update it.
+		// Since the start of the linked list hasn't changed, return the same value.
+		prevRec, err := db.readRecordFrom(prevOffset)
+		if err != nil {
+			return 0, err
+		}
+		prevRec.next = offset
+		err = db.writeRecordTo(prevOffset, prevRec)
+		if err != nil {
+			return 0, err
+		}
+		return start, nil
+	}
+
+	// Case-2. Record was found. But The new data is not an exact fit. So, add a new record and adjust
+	// previous record if required.
+	if len(rec.data) != len(data) {
+		// Save the new data in the record and rewrite it at writeOffset
+		rec.data = data
+		if err := db.writeRecordTo(db.writeOffset, rec); err != nil {
+			return 0, err
+		}
+		offset = db.writeOffset
+		db.writeOffset += dataOffset(rec.size()) // advance the write pointer.
+
+		// If there was no previous record, then this was the first record.
+		// It was moved because it didn't fit in it's previous offset. Return it's new offset.
+		if prevOffset == 0 {
+			return offset, nil
+		}
+
+		// There was a previous record. Fetch and update it.
+		// Since the start of the linked list hasn't changed, return the same value.
+		prevRec, err := db.readRecordFrom(prevOffset)
+		if err != nil {
+			return 0, err
+		}
+		prevRec.next = offset
+		err = db.writeRecordTo(prevOffset, prevRec)
+		if err != nil {
+			return 0, err
+		}
+		return start, nil
+	}
+
+	// Case-3: The record was found and the new data is an exact fit in the current space.
+	rec.data = data
+	if err := db.writeRecordTo(offset, rec); err != nil {
+		return 0, err
+	}
+
+	return start, nil
+}
+
 type record interface {
 	read([]byte) (*dataRecord, error)
 	write([]byte)

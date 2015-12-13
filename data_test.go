@@ -151,6 +151,160 @@ func TestDataBlockFetchErrors(t *testing.T) {
 	}
 }
 
+func TestDataBlockUpdates(t *testing.T) {
+	headerBytes := make([]byte, 4*sizeOfUint32)
+
+	cases := []struct {
+		db                 *dataBlock
+		startOffset        dataOffset
+		key                string
+		data               []byte
+		expectedOffset     dataOffset
+		expectedBlockState []byte
+	}{
+		{ // Case-0: Key is at the head of the list and the data is exact match.
+			db: &dataBlock{
+				block: concatBytes(
+					headerBytes,
+					[]byte{
+						0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // data size and key size
+						0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
+						0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
+						0x00, 0x00, 0x00, 0x00, // next (0)
+					},
+				),
+
+				writeOffset: dataBlockHeaderSize,
+			},
+			startOffset:    0x10,
+			key:            "TestKey",
+			data:           []byte("TESTTEST1"),
+			expectedOffset: 0x10,
+			expectedBlockState: concatBytes(
+				headerBytes,
+				[]byte{
+					0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // data size and key size
+					0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
+					0x54, 0x45, 0x53, 0x54, 0x54, 0x45, 0x53, 0x54, 0x31, // data (TESTTEST1)
+					0x00, 0x00, 0x00, 0x00, // next (0)
+				},
+			),
+		},
+		{ // Case-1: Key is at the head of the list and the new data size is diferent from previous one.
+			db: &dataBlock{
+				block: concatBytes(
+					headerBytes,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
+
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+					},
+				),
+				writeOffset: 0x20,
+			},
+			startOffset:    0x10,
+			key:            "AA",
+			data:           []byte("NewData"),
+			expectedOffset: 0x20,
+			expectedBlockState: concatBytes(
+				headerBytes,
+				[]byte{
+					// Abandoned record.
+					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
+					0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
+
+					// new record.
+					0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, // key size (2), data size (7)
+					0x41, 0x41, 0x4E, 0x65, 0x77, 0x44, 0x61, 0x74, 0x61, // key (AA), Data (NewData)
+					0x20, 0x00, 0x00, 0x00, // next(0x20)
+					0x00, 0x00, 0x00, // buffer
+				},
+			),
+		},
+		{ // Case-2: Key is at the middle of the list and the new data size is diferent from previous one.
+			db: &dataBlock{
+				block: concatBytes(
+					headerBytes,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
+
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x42, 0x42, 0x32, 0x32, 0xF0, 0xE0, 0xD0, 0xC0, // key (BB), Data (22), next(0xC0D0E0F0)
+
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+					},
+				),
+				writeOffset: 0x30,
+			},
+			startOffset:    0x10,
+			key:            "BB",
+			data:           []byte("NewData"),
+			expectedOffset: 0x10,
+			expectedBlockState: concatBytes(
+				headerBytes,
+				[]byte{
+					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
+					0x41, 0x41, 0x31, 0x31, 0x30, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x30)
+
+					// abandoned record.
+					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
+					0x42, 0x42, 0x32, 0x32, 0xF0, 0xE0, 0xD0, 0xC0, // key (BB), Data (22), next(0xC0D0E0F0)
+
+					// New record.
+					0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, // key size (2), data size (7)
+					0x42, 0x42, 0x4E, 0x65, 0x77, 0x44, 0x61, 0x74, 0x61, // key (BB), Data (NewData)
+					0xF0, 0xE0, 0xD0, 0xC0, //  next(0xC0D0E0F0)
+
+					0x00, 0x00, 0x00, // buffer
+				},
+			),
+		},
+		{ // Case-3: Key was not found.
+			db: &dataBlock{
+				block: concatBytes(
+					headerBytes,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
+
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+					},
+				),
+				writeOffset: 0x20,
+			},
+			startOffset:    0x10,
+			key:            "BB",
+			data:           []byte("22"),
+			expectedOffset: 0x10,
+			expectedBlockState: concatBytes(
+				headerBytes,
+				[]byte{
+					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+					0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
+
+					// new record.
+					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+					0x42, 0x42, 0x32, 0x32, 0x00, 0x00, 0x00, 0x00, // key (BB), Data (22), next(0x20)
+				},
+			),
+		},
+	}
+
+	for i, tc := range cases {
+		offset, err := tc.db.update(tc.startOffset, tc.key, tc.data)
+		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
+		ensure.DeepEqual(t, offset, tc.expectedOffset, fmt.Sprintf("Case: [%d]", i))
+		ensure.DeepEqual(t, tc.db.block, tc.expectedBlockState, fmt.Sprintf("Case: [%d]", i))
+	}
+}
+
 // TestDataBlockSave tests succesful saving of key value pairs in a given data block.
 func TestDataBlockSave(t *testing.T) {
 	cases := []struct {
@@ -218,24 +372,34 @@ func TestDataBlockSave(t *testing.T) {
 
 func TestDataBlockSaveErrors(t *testing.T) {
 	cases := []struct {
-		keys      []string
-		values    [][]byte
-		blockSize int
+		keys           []string
+		values         [][]byte
+		blockSize      int
+		expectedErrStr string
 	}{
-		{ // empty keys.
-			keys:      []string{""},
-			values:    [][]byte{[]byte("123")},
-			blockSize: 320,
+		{ // Case-0: empty keys.
+			keys:           []string{""},
+			values:         [][]byte{[]byte("123")},
+			blockSize:      320,
+			expectedErrStr: `^dataBlock save failed. key \[\] and data \[31 32 33\] must be non-zero length*`,
 		},
-		{ // empty values.
-			keys:      []string{"key"},
-			values:    [][]byte{[]byte{}},
-			blockSize: 320,
+		{ // Case-1: empty values.
+			keys:           []string{"key"},
+			values:         [][]byte{[]byte{}},
+			blockSize:      320,
+			expectedErrStr: `^dataBlock save failed. key \[key\] and data \[\] must be non-zero length*`,
 		},
-		{ // empty keys & values.
-			keys:      []string{"key1", "key2", "key3", "key4"},
-			values:    [][]byte{[]byte("val1"), []byte("val2"), []byte("val3"), []byte("val4")},
-			blockSize: 60,
+		{ // Case-2: Test saving when the block is completely full.
+			keys:           []string{"key1", "key2", "key3", "key4"},
+			values:         [][]byte{[]byte("val1"), []byte("val2"), []byte("val3"), []byte("val4")},
+			blockSize:      60,
+			expectedErrStr: `^dataBlock: Cannot write to offset \[0x4c\]. Block size: \[0x4c\]*`,
+		},
+		{ // Case-3: Test saving when the free space is not sufficient to save a new record.
+			keys:           []string{"key1", "key2", "key3", "key4"},
+			values:         [][]byte{[]byte("val1"), []byte("val2"), []byte("val3"), []byte("val4")},
+			blockSize:      65,
+			expectedErrStr: `^dataBlock: Cannot write to offset \[0x4c\]. Record \[0x14 bytes\] exceeds data block boundary \[0x51\]*`,
 		},
 	}
 
@@ -248,12 +412,7 @@ func TestDataBlockSaveErrors(t *testing.T) {
 			_, err := db.save(key, tc.values[j])
 			// expect an error only while saving the last record.
 			if j == len(tc.keys)-1 {
-				ensure.Err(
-					t,
-					err,
-					regexp.MustCompile("(^dataBlock: Cannot write to offset|^Unable to write the key*|^dataBlock save failed*)"),
-					fmt.Sprintf("Case: [%d]", i),
-				)
+				ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr), fmt.Sprintf("Case: [%d]", i))
 			} else {
 				// Saving all other keys should not result in error.
 				ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
