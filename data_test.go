@@ -85,26 +85,26 @@ func TestDataBlockFetch(t *testing.T) {
 
 func TestDataBlockFetchErrors(t *testing.T) {
 	cases := []struct {
-		db               *dataBlock
-		startOffset      dataOffset
-		key              string
-		expectedErrorStr string
+		db             *dataBlock
+		startOffset    dataOffset
+		key            string
+		expectedErrStr string
 	}{
 		{ // Case-0: offset is in header area.
 			db: &dataBlock{
 				block: []byte{},
 			},
-			startOffset:      0x08,
-			key:              "TestKey",
-			expectedErrorStr: "^dataBlock: invalid start offset [0x8]*",
+			startOffset:    0x08,
+			key:            "TestKey",
+			expectedErrStr: "^dataBlock: invalid start offset [0x8]*",
 		},
 		{ // Case-1: startOffset is out of bound.
 			db: &dataBlock{
 				block: []byte{},
 			},
-			startOffset:      0x20,
-			key:              "TestKey",
-			expectedErrorStr: "^dataBlock: Cannot read out of bound offset [0x20]*",
+			startOffset:    0x20,
+			key:            "TestKey",
+			expectedErrStr: "^dataBlock: Cannot read out of bound offset [0x20]*",
 		},
 		{ // Case-2: out of bound access while traversing.
 			db: &dataBlock{
@@ -117,9 +117,9 @@ func TestDataBlockFetchErrors(t *testing.T) {
 					},
 				),
 			},
-			startOffset:      0x10,
-			key:              "NonExistingKey",
-			expectedErrorStr: `^dataBlock: Cannot read out of bound offset \[0xff\]*`,
+			startOffset:    0x10,
+			key:            "NonExistingKey",
+			expectedErrStr: `^dataBlock: Cannot read out of bound offset \[0xff\]*`,
 		},
 		{ // Case-3: Key is not found.
 			db: &dataBlock{
@@ -132,9 +132,9 @@ func TestDataBlockFetchErrors(t *testing.T) {
 					},
 				),
 			},
-			startOffset:      0x10,
-			key:              "NonExistingKey",
-			expectedErrorStr: `^dataBlock: key \[NonExistingKey\] was not found starting at \[10\]*`,
+			startOffset:    0x10,
+			key:            "NonExistingKey",
+			expectedErrStr: `^dataBlock: key \[NonExistingKey\] was not found starting at \[10\]*`,
 		},
 		{ // Case-4: key size exceeds max key size
 			db: &dataBlock{
@@ -147,9 +147,9 @@ func TestDataBlockFetchErrors(t *testing.T) {
 					},
 				),
 			},
-			startOffset:      0x10,
-			key:              "NonExistingKey",
-			expectedErrorStr: `^dataRecord: failed to read the key \(size=0x10001\). It exceeds max size \[0x10000\]*`,
+			startOffset:    0x10,
+			key:            "NonExistingKey",
+			expectedErrStr: `^dataRecord: failed to read the key \(size=0x10001\). It exceeds max size \[0x10000\]*`,
 		},
 		{ // Case-5: data size exceeds max key size
 			db: &dataBlock{
@@ -162,9 +162,9 @@ func TestDataBlockFetchErrors(t *testing.T) {
 					},
 				),
 			},
-			startOffset:      0x10,
-			key:              "NonExistingKey",
-			expectedErrorStr: `^dataRecord: failed to read the data \(size=0x8000001\). It exceeds max size \[0x8000000\]`,
+			startOffset:    0x10,
+			key:            "NonExistingKey",
+			expectedErrStr: `^dataRecord: failed to read the data \(size=0x8000001\). It exceeds max size \[0x8000000\]`,
 		},
 	}
 
@@ -172,7 +172,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		data, err := tc.db.fetch(tc.startOffset, tc.key)
 		ensure.True(t, (data == nil), fmt.Sprintf("Case: [%d]", i))
 		//ensure.DeepEqual(t, data, tc.expectedBytes, fmt.Sprintf("Case: [%d]", i))
-		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrorStr), fmt.Sprintf("Case: [%d]", i))
+		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr), fmt.Sprintf("Case: [%d]", i))
 	}
 }
 
@@ -328,6 +328,96 @@ func TestDataBlockUpdates(t *testing.T) {
 		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 		ensure.DeepEqual(t, offset, tc.expectedOffset, fmt.Sprintf("Case: [%d]", i))
 		ensure.DeepEqual(t, tc.db.block, tc.expectedBlockState, fmt.Sprintf("Case: [%d]", i))
+	}
+}
+
+func TestDataBlockUpdateErrors(t *testing.T) {
+	cases := []struct {
+		db             *dataBlock
+		startOffset    dataOffset
+		key            string
+		data           []byte
+		expectedErrStr string
+	}{
+		{ // case-0: out of bound start offset.
+			db:             &dataBlock{},
+			startOffset:    0xFF,
+			key:            "key",
+			data:           []byte("value"),
+			expectedErrStr: `^dataBlock: Cannot read out of bound offset \[0xff\]. Block size: \[0x0\]*`,
+		},
+		{ // case-1: No space to update the list with a new key.
+			db: &dataBlock{
+				block: concatBytes(
+					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
+					},
+				),
+			},
+			startOffset:    0x10,
+			key:            "key",
+			data:           []byte("value"),
+			expectedErrStr: `^dataBlock: Cannot write to offset \[0x20\]. Block size: \[0x20\]*`,
+		},
+		{ // case-2: No space to update the list. Key exists but the data doesn't fit.
+			db: &dataBlock{
+				block: concatBytes(
+					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
+
+						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
+					},
+				),
+			},
+			startOffset:    0x10,
+			key:            "AA",
+			data:           []byte("value"),
+			expectedErrStr: `^dataBlock: Cannot write to offset \[0x20\]. Record \[0x13 bytes\] exceeds data block boundary \[0x28\]`,
+		},
+		{ // case-3: It's an existing key with bigger data. Cannot be added because of a bad write offset.
+			db: &dataBlock{
+				block: concatBytes(
+					[]byte{0x05, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
+					},
+				),
+			},
+			startOffset:    0x10,
+			key:            "AA",
+			data:           []byte("value"),
+			expectedErrStr: `^dataBlock: invalid write offset \[0x5\]. It falls within header area \[0x00 - 0x10\]`,
+		},
+		{ // case-3: It's a new key but cannot be added because of a bad write offset.
+			db: &dataBlock{
+				block: concatBytes(
+					[]byte{0x05, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
+					},
+				),
+			},
+			startOffset:    0x10,
+			key:            "key",
+			data:           []byte("value"),
+			expectedErrStr: `^dataBlock: invalid write offset \[0x5\]. It falls within header area \[0x00 - 0x10\]`,
+		},
+	}
+
+	for i, tc := range cases {
+		offset, err := tc.db.update(tc.startOffset, tc.key, tc.data)
+		ensure.True(t, (offset == 0), fmt.Sprintf("Case: [%d]. offset [%#v] should be 0", i, offset))
+		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr))
 	}
 }
 

@@ -48,7 +48,7 @@ func (db *dataBlock) getWriteOffset() (dataOffset, error) {
 		return 0, stackerr.Newf("dataBlock: unable to fetch current write offset. Err: [%s]", err.Error())
 	}
 	if offset < db.headerSize() {
-		return 0, stackerr.Newf("dataBlock: invalid write offset [%x]. It falls within header area [0x00 - %x]", offset, db.headerSize())
+		return 0, stackerr.Newf("dataBlock: invalid write offset [%#v]. It falls within header area [0x00 - %#v]", offset, db.headerSize())
 	}
 	return offset, nil
 }
