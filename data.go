@@ -30,7 +30,11 @@ type dataBlock struct {
 }
 
 func (db *dataBlock) reset() error {
-	return db.updateWriteOffset(db.headerSize())
+	if err := db.updateWriteOffset(db.headerSize()); err != nil {
+		return err
+	}
+	db.updateTotalSize(0)
+	return nil
 }
 
 func (db *dataBlock) updateWriteOffset(offset dataOffset) error {
@@ -286,6 +290,38 @@ func (db *dataBlock) update(start dataOffset, key string, data []byte) (dataOffs
 		return 0, err
 	}
 
+	return start, nil
+}
+
+func (db *dataBlock) delete(start dataOffset, key string) (dataOffset, error) {
+	rec, _, prevOffset, err := db.find(start, key)
+	if err != nil {
+		return 0, err
+	}
+
+	if rec == nil {
+		return 0, stackerr.Newf("dataBlock: cannot delete key [%d]. It was not found in the list starting at [%#v]", key, start)
+	}
+
+	// rec is at the start of the list.
+	if prevOffset == 0 {
+		db.decrTotalSize(rec.size())
+		return rec.next, nil
+	}
+
+	// There was a previous record. Fetch and update it.
+	// Since the start of the linked list hasn't changed, return the same value.
+	prevRec, err := db.readRecordFrom(prevOffset)
+	if err != nil {
+		return 0, err
+	}
+	prevRec.next = rec.next
+	err = db.writeRecordTo(prevOffset, prevRec)
+	if err != nil {
+		return 0, err
+	}
+
+	db.decrTotalSize(rec.size())
 	return start, nil
 }
 
