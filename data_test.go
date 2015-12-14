@@ -20,10 +20,9 @@ func concatBytes(slices ...[]byte) []byte {
 	return ret
 }
 
-var headerBytes = make([]byte, 4*sizeOfUint32)
+var headerBuffer = make([]byte, 3*sizeOfUint32)
 
 func TestDataBlockFetch(t *testing.T) {
-
 	cases := []struct {
 		db            *dataBlock
 		startOffset   dataOffset
@@ -33,7 +32,8 @@ func TestDataBlockFetch(t *testing.T) {
 		{ // Case-0: Key is at the head of the list.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
+					headerBuffer,
 					[]byte{
 						0x07, 0x00, 0x00, 0x00, // key size
 						0x09, 0x00, 0x00, 0x00, // data size
@@ -50,7 +50,8 @@ func TestDataBlockFetch(t *testing.T) {
 		{ // Case-1: Key is in the middle of the list.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
+					headerBuffer,
 					[]byte{ // record-1
 						0x04, 0x00, 0x00, 0x00, // key size
 						0x04, 0x00, 0x00, 0x00, // data size
@@ -83,8 +84,6 @@ func TestDataBlockFetch(t *testing.T) {
 }
 
 func TestDataBlockFetchErrors(t *testing.T) {
-	headerBytes := make([]byte, 4*sizeOfUint32)
-
 	cases := []struct {
 		db               *dataBlock
 		startOffset      dataOffset
@@ -110,13 +109,11 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		{ // Case-2: out of bound access while traversing.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
+					headerBuffer,
 					[]byte{
-						0x07, 0x00, 0x00, 0x00, // key size
-						0x09, 0x00, 0x00, 0x00, // data size
-						0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
-						0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
-						0xFF, 0x00, 0x00, 0x00, // next (0)
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
+						0x41, 0x41, 0x31, 0x31, 0xFF, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0xFF)
 					},
 				),
 			},
@@ -127,19 +124,47 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		{ // Case-3: Key is not found.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
+					headerBuffer,
 					[]byte{
-						0x07, 0x00, 0x00, 0x00, // key size
-						0x09, 0x00, 0x00, 0x00, // data size
-						0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
-						0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
-						0x00, 0x00, 0x00, 0x00, // next (0)
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
 					},
 				),
 			},
 			startOffset:      0x10,
 			key:              "NonExistingKey",
 			expectedErrorStr: `^dataBlock: key \[NonExistingKey\] was not found starting at \[10\]*`,
+		},
+		{ // Case-4: key size exceeds max key size
+			db: &dataBlock{
+				block: concatBytes(
+					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
+					headerBuffer,
+					[]byte{
+						0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (0x10001), data size (2)
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
+					},
+				),
+			},
+			startOffset:      0x10,
+			key:              "NonExistingKey",
+			expectedErrorStr: `^dataRecord: failed to read the key \(size=0x10001\). It exceeds max size \[0x10000\]*`,
+		},
+		{ // Case-5: data size exceeds max key size
+			db: &dataBlock{
+				block: concatBytes(
+					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
+					headerBuffer,
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x08, // key size (0x10001), data size (0x0800000)
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
+					},
+				),
+			},
+			startOffset:      0x10,
+			key:              "NonExistingKey",
+			expectedErrorStr: `^dataRecord: failed to read the data \(size=0x8000001\). It exceeds max size \[0x8000000\]`,
 		},
 	}
 
@@ -152,8 +177,6 @@ func TestDataBlockFetchErrors(t *testing.T) {
 }
 
 func TestDataBlockUpdates(t *testing.T) {
-	headerBytes := make([]byte, 4*sizeOfUint32)
-
 	cases := []struct {
 		db                 *dataBlock
 		startOffset        dataOffset
@@ -165,7 +188,8 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-0: Key is at the head of the list and the data is exact match.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0x10, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
 					[]byte{
 						0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // data size and key size
 						0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
@@ -173,15 +197,14 @@ func TestDataBlockUpdates(t *testing.T) {
 						0x00, 0x00, 0x00, 0x00, // next (0)
 					},
 				),
-
-				writeOffset: dataBlockHeaderSize,
 			},
 			startOffset:    0x10,
 			key:            "TestKey",
 			data:           []byte("TESTTEST1"),
 			expectedOffset: 0x10,
 			expectedBlockState: concatBytes(
-				headerBytes,
+				[]byte{0x10, 0x00, 0x00, 0x00}, // current write offset
+				headerBuffer,
 				[]byte{
 					0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // data size and key size
 					0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
@@ -193,7 +216,8 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-1: Key is at the head of the list and the new data size is diferent from previous one.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
@@ -203,14 +227,14 @@ func TestDataBlockUpdates(t *testing.T) {
 						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
 					},
 				),
-				writeOffset: 0x20,
 			},
 			startOffset:    0x10,
 			key:            "AA",
 			data:           []byte("NewData"),
 			expectedOffset: 0x20,
 			expectedBlockState: concatBytes(
-				headerBytes,
+				[]byte{0x35, 0x00, 0x00, 0x00}, // current write offset
+				headerBuffer,
 				[]byte{
 					// Abandoned record.
 					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
@@ -227,7 +251,8 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-2: Key is at the middle of the list and the new data size is diferent from previous one.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0x30, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
@@ -240,14 +265,14 @@ func TestDataBlockUpdates(t *testing.T) {
 						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
 					},
 				),
-				writeOffset: 0x30,
 			},
 			startOffset:    0x10,
 			key:            "BB",
 			data:           []byte("NewData"),
 			expectedOffset: 0x10,
 			expectedBlockState: concatBytes(
-				headerBytes,
+				[]byte{0x45, 0x00, 0x00, 0x00}, // current write offset
+				headerBuffer,
 				[]byte{
 					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
 					0x41, 0x41, 0x31, 0x31, 0x30, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x30)
@@ -268,7 +293,8 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-3: Key was not found.
 			db: &dataBlock{
 				block: concatBytes(
-					headerBytes,
+					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
+					headerBuffer,
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
@@ -277,14 +303,14 @@ func TestDataBlockUpdates(t *testing.T) {
 						0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // buffer
 					},
 				),
-				writeOffset: 0x20,
 			},
 			startOffset:    0x10,
 			key:            "BB",
 			data:           []byte("22"),
 			expectedOffset: 0x10,
 			expectedBlockState: concatBytes(
-				headerBytes,
+				[]byte{0x30, 0x00, 0x00, 0x00}, // current write offset
+				headerBuffer,
 				[]byte{
 					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 					0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
@@ -316,12 +342,11 @@ func TestDataBlockSave(t *testing.T) {
 			kvPairs: map[string][]byte{"key": []byte("value")},
 			order:   []string{"key"},
 			expectedBlock: concatBytes(
-				headerBytes,
+				[]byte{0x24, 0x00, 0x00, 0x00}, // current write offset
+				headerBuffer,
 				[]byte{
-					0x03, 0x00, 0x00, 0x00, // key size (3)
-					0x05, 0x00, 0x00, 0x00, // data size (5)
-					0x6b, 0x65, 0x79, // Key (key)
-					0x76, 0x61, 0x6C, 0x75, 0x65, // data (value)
+					0x03, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, // key size (3), data size (5)
+					0x6b, 0x65, 0x79, 0x76, 0x61, 0x6C, 0x75, 0x65, // Key (key), data (value)
 					0x00, 0x00, 0x00, 0x00, // next (0)
 				},
 			),
@@ -334,24 +359,19 @@ func TestDataBlockSave(t *testing.T) {
 			},
 			order: []string{"key1", "key3", "key2"},
 			expectedBlock: concatBytes(
-				headerBytes,
+				[]byte{0x52, 0x00, 0x00, 0x00}, // current write offset
+				headerBuffer,
 				[]byte{
-					0x04, 0x00, 0x00, 0x00, // key size (4)
-					0x06, 0x00, 0x00, 0x00, // data size (6)
-					0x6b, 0x65, 0x79, 0x31, // key (key1)
-					0x76, 0x61, 0x6C, 0x75, 0x65, 0x31, // data (value1)
+					0x04, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // key size (4), data size (6)
+					0x6b, 0x65, 0x79, 0x31, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x31, // key (key1), data (value1)
 					0x00, 0x00, 0x00, 0x00, // next (0)
 
-					0x04, 0x00, 0x00, 0x00, // key size (4)
-					0x06, 0x00, 0x00, 0x00, // data size (6)
-					0x6b, 0x65, 0x79, 0x33, // key (key1)
-					0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, // data (value1)
+					0x04, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // key size (4), data size (6)
+					0x6b, 0x65, 0x79, 0x33, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, // key (key1), data (value1)
 					0x00, 0x00, 0x00, 0x00, // next (0)
 
-					0x04, 0x00, 0x00, 0x00, // key size (4)
-					0x06, 0x00, 0x00, 0x00, // data size (6)
-					0x6b, 0x65, 0x79, 0x32, // key (key1)
-					0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, // data (value1)
+					0x04, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // key size (4), data size (6)
+					0x6b, 0x65, 0x79, 0x32, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, // key (key1), data (value1)
 					0x00, 0x00, 0x00, 0x00, // next (0)
 				},
 			),
@@ -359,14 +379,16 @@ func TestDataBlockSave(t *testing.T) {
 	}
 
 	for i, tc := range cases {
-		buf := make([]byte, len(tc.expectedBlock))
-		db := &dataBlock{block: buf, writeOffset: dataBlockHeaderSize}
+		db := &dataBlock{block: make([]byte, len(tc.expectedBlock))}
+		err := db.reset() // Reset the write offset.
+		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 		for _, key := range tc.order {
 			val := tc.kvPairs[key]
-			_, err := db.save(key, val)
+			offset, err := db.save(key, val)
 			ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
+			ensure.True(t, (offset > 0), fmt.Sprintf("Case: [%d]. Offset must not be 0. Got [%x]", i, offset))
 		}
-		ensure.DeepEqual(t, buf, tc.expectedBlock, fmt.Sprintf("Case: [%d]", i))
+		ensure.DeepEqual(t, db.block, tc.expectedBlock, fmt.Sprintf("Case: [%d]", i))
 	}
 }
 
@@ -381,13 +403,13 @@ func TestDataBlockSaveErrors(t *testing.T) {
 			keys:           []string{""},
 			values:         [][]byte{[]byte("123")},
 			blockSize:      320,
-			expectedErrStr: `^dataBlock save failed. key \[\] and data \[31 32 33\] must be non-zero length*`,
+			expectedErrStr: `^dataBlock: save failed. key \[\] and data \[31 32 33\] must be non-zero length*`,
 		},
 		{ // Case-1: empty values.
 			keys:           []string{"key"},
 			values:         [][]byte{[]byte{}},
 			blockSize:      320,
-			expectedErrStr: `^dataBlock save failed. key \[key\] and data \[\] must be non-zero length*`,
+			expectedErrStr: `^dataBlock: save failed. key \[key\] and data \[\] must be non-zero length*`,
 		},
 		{ // Case-2: Test saving when the block is completely full.
 			keys:           []string{"key1", "key2", "key3", "key4"},
@@ -405,8 +427,11 @@ func TestDataBlockSaveErrors(t *testing.T) {
 
 	for i, tc := range cases {
 		db := &dataBlock{
-			writeOffset: dataBlockHeaderSize,
-			block:       append(headerBytes, make([]byte, tc.blockSize)...),
+			block: concatBytes(
+				[]byte{0x10, 0x00, 0x00, 0x00},
+				headerBuffer,
+				make([]byte, tc.blockSize),
+			),
 		}
 		for j, key := range tc.keys {
 			_, err := db.save(key, tc.values[j])
@@ -438,8 +463,7 @@ func TestDataRecordWrite(t *testing.T) {
 		{ // Case-2
 			rec: &dataRecord{key: []byte("TestKey"), data: []byte("TestValue")},
 			expected: []byte{
-				0x07, 0x00, 0x00, 0x00, // key size
-				0x09, 0x00, 0x00, 0x00, // data size
+				0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // key size (7), data size (9)
 				0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
 				0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
 				0x00, 0x00, 0x00, 0x00, // next (0)
@@ -477,8 +501,7 @@ func TestDataRecordRead(t *testing.T) {
 		},
 		{ // Case-2: Reading a non-empty record with exact matching bytes.
 			block: []byte{
-				0x07, 0x00, 0x00, 0x00, // key size
-				0x09, 0x00, 0x00, 0x00, // data size
+				0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // key size (7), data size (9)
 				0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
 				0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
 				0x00, 0x00, 0x00, 0x00, // next (0)
@@ -487,14 +510,12 @@ func TestDataRecordRead(t *testing.T) {
 		},
 		{ // Case-3: Reading a non-empty record from a bigger block of data.
 			block: []byte{
-				0x07, 0x00, 0x00, 0x00, // key size
-				0x09, 0x00, 0x00, 0x00, // data size
+				0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // key size (7),  data size (9)
 				0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
 				0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
 				0x04, 0x03, 0x02, 0x01, // next (0)
 
-				0x99, 0x99, 0x99, 0x99, // junk
-				0x99, 0x99, 0x99, 0x99,
+				0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, // junk
 			},
 			expectedRec: &dataRecord{key: []byte("TestKey"), data: []byte("TestValue"), next: 0x01020304},
 		},
@@ -525,23 +546,20 @@ func TestDataRecordReadErrors(t *testing.T) {
 		},
 		{ // Case-2
 			block: []byte{
-				0x07, 0x00, 0x00, 0x00, // key size
-				0x09, 0x00, 0x00, 0x00, // data size
+				0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // key size (7), data size (9)
 			},
 			expectedErrStr: "^dataRecord: failed to read the key*",
 		},
 		{ // Case-3
 			block: []byte{
-				0x07, 0x00, 0x00, 0x00, // key size
-				0x09, 0x00, 0x00, 0x00, // data size
+				0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // key size (7), data size (9)
 				0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
 			},
 			expectedErrStr: "^dataRecord: failed to read the data*",
 		},
 		{ // Case-4
 			block: []byte{
-				0x07, 0x00, 0x00, 0x00, // key size
-				0x09, 0x00, 0x00, 0x00, // data size
+				0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // key size (7), data size (9)
 				0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
 				0x54, 0x65, 0x73, 0x74, 0x56, 0x61, 0x6C, 0x75, 0x65, // data (TestValue)
 			},

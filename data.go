@@ -10,18 +10,47 @@ import (
 )
 
 const (
-	dataBlockHeaderSize = 0x10
+	dataBlockHeaderSize = uint32(0x10)
+	maxKeySize          = uint32(0x01 << 16) // 65 KB
+	maxDataSize         = uint32(0x01 << 27) // 128 MB
 )
 
 type dataStore interface {
 	save(key string, data []byte) (dataOffset, error)
 	update(start dataOffset, key string, data []byte) (dataOffset, error)
 	fetch(start dataOffset, key string) ([]byte, error)
+	reset() error
 }
 
 type dataBlock struct {
 	writeOffset dataOffset
 	block       []byte
+}
+
+func (db *dataBlock) reset() error {
+	return db.updateWriteOffset(db.headerSize())
+}
+
+func (db *dataBlock) updateWriteOffset(offset dataOffset) error {
+	//db.writeOffset = offset
+	//return nil
+	// First 4 bytes of the header is reserved for write offset.
+	buf := &writeBuffer{buf: db.block[:sizeOfUint32]}
+	binary.Write(buf, binary.LittleEndian, offset)
+	return buf.err
+}
+
+func (db *dataBlock) getWriteOffset() (dataOffset, error) {
+	//return db.writeOffset, nil
+	buf := bytes.NewReader(db.block[:sizeOfUint32])
+	var offset dataOffset
+	if err := binary.Read(buf, binary.LittleEndian, &offset); err != nil {
+		return 0, stackerr.Newf("dataBlock: unable to fetch current write offset. Err: [%s]", err.Error())
+	}
+	if offset < db.headerSize() {
+		return 0, stackerr.Newf("dataBlock: invalid write offset [%x]. It falls within header area [0x00 - %x]", offset, db.headerSize())
+	}
+	return offset, nil
 }
 
 func (db *dataBlock) headerSize() dataOffset {
@@ -31,21 +60,26 @@ func (db *dataBlock) headerSize() dataOffset {
 // save saves a new record and returns the offset where the record was saved.
 func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
 	if len(key) == 0 || len(data) == 0 {
-		return 0, stackerr.Newf("dataBlock save failed. key [%s] and data [% x] must be non-zero length", key, data)
+		return 0, stackerr.Newf("dataBlock: save failed. key [%s] and data [% x] must be non-zero length", key, data)
 	}
+
 	rec := &dataRecord{
 		key:  []byte(key),
 		data: data,
 	}
-	err := db.writeRecordTo(db.writeOffset, rec)
+	offset, err := db.getWriteOffset()
 	if err != nil {
+		return 0, err
+	}
+	if err := db.writeRecordTo(offset, rec); err != nil {
 		return 0, err
 	}
 
 	// advance the write offset.
-	writtenOffset := db.writeOffset
-	db.writeOffset += dataOffset(rec.size())
-	return writtenOffset, nil
+	if err := db.updateWriteOffset(offset + dataOffset(rec.size())); err != nil {
+		return 0, err
+	}
+	return offset, nil
 }
 
 func (db *dataBlock) fetch(start dataOffset, key string) ([]byte, error) {
@@ -162,13 +196,20 @@ func (db *dataBlock) update(start dataOffset, key string, data []byte) (dataOffs
 	// Case-2. Record was found. But The new data is not an exact fit. So, add a new record and adjust
 	// previous record if required.
 	if len(rec.data) != len(data) {
-		// Save the new data in the record and rewrite it at writeOffset
+		// Save the new data in the record and rewrite it at the current write offset
 		rec.data = data
-		if err := db.writeRecordTo(db.writeOffset, rec); err != nil {
+		offset, err := db.getWriteOffset()
+		if err != nil {
 			return 0, err
 		}
-		offset = db.writeOffset
-		db.writeOffset += dataOffset(rec.size()) // advance the write pointer.
+
+		if err := db.writeRecordTo(offset, rec); err != nil {
+			return 0, err
+		}
+		// advance the write pointer.
+		if err := db.updateWriteOffset(offset + dataOffset(rec.size())); err != nil {
+			return 0, err
+		}
 
 		// If there was no previous record, then this was the first record.
 		// It was moved because it didn't fit in it's previous offset. Return it's new offset.
@@ -220,12 +261,18 @@ func (r *dataRecord) read(block []byte) (*dataRecord, error) {
 	if err != nil {
 		return nil, stackerr.Newf("dataRecord: failed to read the key size. error: [%s]", err.Error())
 	}
+	if keySize > maxKeySize {
+		return nil, stackerr.Newf("dataRecord: failed to read the key (size=%#v). It exceeds max size [%#v]", keySize, maxKeySize)
+	}
 
 	// read data size.
 	var dataSize uint32
 	err = binary.Read(buf, binary.LittleEndian, &dataSize)
 	if err != nil {
 		return nil, stackerr.Newf("dataRecord: failed to read the data size. error: [%s]. Block: \n%s\n", err.Error(), spew.Sdump(block))
+	}
+	if dataSize > maxDataSize {
+		return nil, stackerr.Newf("dataRecord: failed to read the data (size=%#v). It exceeds max size [%#v]", dataSize, maxDataSize)
 	}
 
 	// allocate key and then read into it.
