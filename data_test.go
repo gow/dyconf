@@ -20,7 +20,11 @@ func concatBytes(slices ...[]byte) []byte {
 	return ret
 }
 
-var headerBuffer = make([]byte, 3*sizeOfUint32)
+func headerBlock(b ...byte) []byte {
+	l := uint32(len(b))
+	b = append(b, make([]byte, dataBlockHeaderSize-l)...)
+	return b
+}
 
 func TestDataBlockFetch(t *testing.T) {
 	cases := []struct {
@@ -32,8 +36,7 @@ func TestDataBlockFetch(t *testing.T) {
 		{ // Case-0: Key is at the head of the list.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
-					headerBuffer,
+					headerBlock(),
 					[]byte{
 						0x07, 0x00, 0x00, 0x00, // key size
 						0x09, 0x00, 0x00, 0x00, // data size
@@ -50,8 +53,7 @@ func TestDataBlockFetch(t *testing.T) {
 		{ // Case-1: Key is in the middle of the list.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
-					headerBuffer,
+					headerBlock(),
 					[]byte{ // record-1
 						0x04, 0x00, 0x00, 0x00, // key size
 						0x04, 0x00, 0x00, 0x00, // data size
@@ -109,8 +111,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		{ // Case-2: out of bound access while traversing.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
-					headerBuffer,
+					headerBlock(),
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
 						0x41, 0x41, 0x31, 0x31, 0xFF, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0xFF)
@@ -124,8 +125,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		{ // Case-3: Key is not found.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
-					headerBuffer,
+					headerBlock(),
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
@@ -139,8 +139,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		{ // Case-4: key size exceeds max key size
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
-					headerBuffer,
+					headerBlock(),
 					[]byte{
 						0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (0x10001), data size (2)
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
@@ -154,8 +153,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 		{ // Case-5: data size exceeds max key size
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0xF0, 0xE0, 0xD0, 0xC0}, // current write offset. Doesn't matter.
-					headerBuffer,
+					headerBlock(),
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x08, // key size (0x10001), data size (0x0800000)
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
@@ -188,8 +186,7 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-0: Key is at the head of the list and the data is exact match.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x10, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x10, 0x00, 0x00, 0x00), // write offset (0x10)
 					[]byte{
 						0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // data size and key size
 						0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
@@ -203,8 +200,7 @@ func TestDataBlockUpdates(t *testing.T) {
 			data:           []byte("TESTTEST1"),
 			expectedOffset: 0x10,
 			expectedBlockState: concatBytes(
-				[]byte{0x10, 0x00, 0x00, 0x00}, // current write offset
-				headerBuffer,
+				headerBlock(0x10, 0x00, 0x00, 0x00), // write offset (0x24)
 				[]byte{
 					0x07, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, // data size and key size
 					0x54, 0x65, 0x73, 0x74, 0x4b, 0x65, 0x79, // key (TestKey)
@@ -216,8 +212,7 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-1: Key is at the head of the list and the new data size is diferent from previous one.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00), // write offset (0x20), total size (0x10)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
@@ -233,8 +228,7 @@ func TestDataBlockUpdates(t *testing.T) {
 			data:           []byte("NewData"),
 			expectedOffset: 0x20,
 			expectedBlockState: concatBytes(
-				[]byte{0x35, 0x00, 0x00, 0x00}, // current write offset
-				headerBuffer,
+				headerBlock(0x35, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00), // write offset (0x35), total size (0x15)
 				[]byte{
 					// Abandoned record.
 					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
@@ -251,8 +245,7 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-2: Key is at the middle of the list and the new data size is diferent from previous one.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x30, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x30, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00), // write offset (0x30), total size (0x20)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
@@ -271,8 +264,7 @@ func TestDataBlockUpdates(t *testing.T) {
 			data:           []byte("NewData"),
 			expectedOffset: 0x10,
 			expectedBlockState: concatBytes(
-				[]byte{0x45, 0x00, 0x00, 0x00}, // current write offset
-				headerBuffer,
+				headerBlock(0x45, 0x00, 0x00, 0x00, 0x25, 0x00, 0x00, 0x00), // write offset (0x45), total size (0x25)
 				[]byte{
 					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
 					0x41, 0x41, 0x31, 0x31, 0x30, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x30)
@@ -293,8 +285,7 @@ func TestDataBlockUpdates(t *testing.T) {
 		{ // Case-3: Key was not found.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00), // write offset (0x20), total size (0x10)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
@@ -309,8 +300,7 @@ func TestDataBlockUpdates(t *testing.T) {
 			data:           []byte("22"),
 			expectedOffset: 0x10,
 			expectedBlockState: concatBytes(
-				[]byte{0x30, 0x00, 0x00, 0x00}, // current write offset
-				headerBuffer,
+				headerBlock(0x30, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00), // write offset (0x30), total size (0x20)
 				[]byte{
 					0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 					0x41, 0x41, 0x31, 0x31, 0x20, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x20)
@@ -349,8 +339,7 @@ func TestDataBlockUpdateErrors(t *testing.T) {
 		{ // case-1: No space to update the list with a new key.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x20, 0x00, 0x00, 0x00), // write offset (0x20)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
@@ -365,8 +354,7 @@ func TestDataBlockUpdateErrors(t *testing.T) {
 		{ // case-2: No space to update the list. Key exists but the data doesn't fit.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x20, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x20, 0x00, 0x00, 0x00), // write offset (0x20)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
@@ -383,8 +371,7 @@ func TestDataBlockUpdateErrors(t *testing.T) {
 		{ // case-3: It's an existing key with bigger data. Cannot be added because of a bad write offset.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x05, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x05, 0x00, 0x00, 0x00), // write offset (0x20)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
@@ -399,8 +386,7 @@ func TestDataBlockUpdateErrors(t *testing.T) {
 		{ // case-3: It's a new key but cannot be added because of a bad write offset.
 			db: &dataBlock{
 				block: concatBytes(
-					[]byte{0x05, 0x00, 0x00, 0x00}, // current write offset
-					headerBuffer,
+					headerBlock(0x05, 0x00, 0x00, 0x00), // write offset (0x20)
 					[]byte{
 						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size, data size
 						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0)
@@ -417,7 +403,7 @@ func TestDataBlockUpdateErrors(t *testing.T) {
 	for i, tc := range cases {
 		offset, err := tc.db.update(tc.startOffset, tc.key, tc.data)
 		ensure.True(t, (offset == 0), fmt.Sprintf("Case: [%d]. offset [%#v] should be 0", i, offset))
-		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr))
+		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr), fmt.Sprintf("Case: [%d]", i))
 	}
 }
 
@@ -432,8 +418,7 @@ func TestDataBlockSave(t *testing.T) {
 			kvPairs: map[string][]byte{"key": []byte("value")},
 			order:   []string{"key"},
 			expectedBlock: concatBytes(
-				[]byte{0x24, 0x00, 0x00, 0x00}, // current write offset
-				headerBuffer,
+				headerBlock(0x24, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00), // write offset (0x24), total size (0x14)
 				[]byte{
 					0x03, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, // key size (3), data size (5)
 					0x6b, 0x65, 0x79, 0x76, 0x61, 0x6C, 0x75, 0x65, // Key (key), data (value)
@@ -449,8 +434,7 @@ func TestDataBlockSave(t *testing.T) {
 			},
 			order: []string{"key1", "key3", "key2"},
 			expectedBlock: concatBytes(
-				[]byte{0x52, 0x00, 0x00, 0x00}, // current write offset
-				headerBuffer,
+				headerBlock(0x52, 0x00, 0x00, 0x00, 0x42, 0x00, 0x00, 0x00), // write offset (0x52), total size (0x42)
 				[]byte{
 					0x04, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // key size (4), data size (6)
 					0x6b, 0x65, 0x79, 0x31, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x31, // key (key1), data (value1)
@@ -518,8 +502,7 @@ func TestDataBlockSaveErrors(t *testing.T) {
 	for i, tc := range cases {
 		db := &dataBlock{
 			block: concatBytes(
-				[]byte{0x10, 0x00, 0x00, 0x00},
-				headerBuffer,
+				headerBlock(0x10, 0x00, 0x00, 0x00), // write offset (0x10)
 				make([]byte, tc.blockSize),
 			),
 		}

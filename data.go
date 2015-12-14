@@ -13,6 +13,9 @@ const (
 	dataBlockHeaderSize = uint32(0x10)
 	maxKeySize          = uint32(0x01 << 16) // 65 KB
 	maxDataSize         = uint32(0x01 << 27) // 128 MB
+
+	headerWriteOffset     = 0x00 // write offset is saved here.
+	headerTotalSizeOffset = 0x04 // total used size is saved here.
 )
 
 type dataStore interface {
@@ -23,8 +26,7 @@ type dataStore interface {
 }
 
 type dataBlock struct {
-	writeOffset dataOffset
-	block       []byte
+	block []byte
 }
 
 func (db *dataBlock) reset() error {
@@ -32,16 +34,16 @@ func (db *dataBlock) reset() error {
 }
 
 func (db *dataBlock) updateWriteOffset(offset dataOffset) error {
-	//db.writeOffset = offset
-	//return nil
 	// First 4 bytes of the header is reserved for write offset.
-	buf := &writeBuffer{buf: db.block[:sizeOfUint32]}
+	buf := &writeBuffer{buf: db.block[headerWriteOffset : headerWriteOffset+sizeOfUint32]}
 	binary.Write(buf, binary.LittleEndian, offset)
-	return buf.err
+	if buf.err != nil {
+		return stackerr.Newf("dataBlock: unable to update write offset. Err: [%s]", buf.err.Error())
+	}
+	return nil
 }
 
 func (db *dataBlock) getWriteOffset() (dataOffset, error) {
-	//return db.writeOffset, nil
 	buf := bytes.NewReader(db.block[:sizeOfUint32])
 	var offset dataOffset
 	if err := binary.Read(buf, binary.LittleEndian, &offset); err != nil {
@@ -51,6 +53,46 @@ func (db *dataBlock) getWriteOffset() (dataOffset, error) {
 		return 0, stackerr.Newf("dataBlock: invalid write offset [%#v]. It falls within header area [0x00 - %#v]", offset, db.headerSize())
 	}
 	return offset, nil
+}
+
+func (db *dataBlock) totalSize() (uint32, error) {
+	buf := bytes.NewReader(db.block[headerTotalSizeOffset : headerTotalSizeOffset+sizeOfUint32])
+	var size uint32
+	if err := binary.Read(buf, binary.LittleEndian, &size); err != nil {
+		return 0, stackerr.Newf("dataBlock: unable to fetch total size. Err: [%s]", err.Error())
+	}
+	return size, nil
+}
+
+func (db *dataBlock) incrTotalSize(inc uint32) (uint32, error) {
+	size, err := db.totalSize()
+	if err != nil {
+		return 0, err
+	}
+	if err := db.updateTotalSize(size + inc); err != nil {
+		return 0, err
+	}
+	return size + inc, nil
+}
+
+func (db *dataBlock) decrTotalSize(dec uint32) (uint32, error) {
+	size, err := db.totalSize()
+	if err != nil {
+		return 0, err
+	}
+	if err := db.updateTotalSize(size - dec); err != nil {
+		return 0, err
+	}
+	return size - dec, nil
+}
+
+func (db *dataBlock) updateTotalSize(size uint32) error {
+	buf := &writeBuffer{buf: db.block[headerTotalSizeOffset : headerTotalSizeOffset+sizeOfUint32]}
+	binary.Write(buf, binary.LittleEndian, size)
+	if buf.err != nil {
+		return stackerr.Newf("dataBlock: unable to update total size. Err: [%s]", buf.err.Error())
+	}
+	return nil
 }
 
 func (db *dataBlock) headerSize() dataOffset {
@@ -79,6 +121,7 @@ func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
 	if err := db.updateWriteOffset(offset + dataOffset(rec.size())); err != nil {
 		return 0, err
 	}
+	db.incrTotalSize(rec.size())
 	return offset, nil
 }
 
@@ -190,12 +233,14 @@ func (db *dataBlock) update(start dataOffset, key string, data []byte) (dataOffs
 		if err != nil {
 			return 0, err
 		}
+
 		return start, nil
 	}
 
 	// Case-2. Record was found. But The new data is not an exact fit. So, add a new record and adjust
 	// previous record if required.
 	if len(rec.data) != len(data) {
+		recOldSize := rec.size()
 		// Save the new data in the record and rewrite it at the current write offset
 		rec.data = data
 		offset, err := db.getWriteOffset()
@@ -210,6 +255,10 @@ func (db *dataBlock) update(start dataOffset, key string, data []byte) (dataOffs
 		if err := db.updateWriteOffset(offset + dataOffset(rec.size())); err != nil {
 			return 0, err
 		}
+
+		// update total size used.
+		db.incrTotalSize(rec.size())
+		db.decrTotalSize(recOldSize)
 
 		// If there was no previous record, then this was the first record.
 		// It was moved because it didn't fit in it's previous offset. Return it's new offset.
@@ -304,7 +353,6 @@ func (r *dataRecord) write(block []byte) error {
 	}
 	buf := &writeBuffer{buf: block}
 	// Just write in one order. The error if any will be caught and cached in buf.Write
-	//binary.Write(buf, binary.LittleEndian, r.size())
 	binary.Write(buf, binary.LittleEndian, r.keySize())
 	binary.Write(buf, binary.LittleEndian, r.dataSize())
 	binary.Write(buf, binary.LittleEndian, r.key)
