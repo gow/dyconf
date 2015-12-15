@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	defaultIndexSize = 1 << 20 // 1 million
-	sizeOfUint32     = 4
-	sizeOfUint16     = 2
+	sizeOfUint32 = 4
+	sizeOfUint16 = 2
 )
 
 type dataOffset uint32
