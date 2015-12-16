@@ -50,3 +50,62 @@ func (c *config) init(fileName string) error {
 
 	return nil
 }
+
+func (c *config) getBytes(key string) ([]byte, error) {
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return nil, err
+	}
+
+	index := &indexBlock{
+		count: defaultIndexCount,
+		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+	}
+	offset, err := index.get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if offset == 0 {
+		return nil, stackerr.Newf("dyconf: key [%s] was not found in the index", key)
+	}
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+	data, err := db.fetch(offset, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (c *config) set(key string, value []byte) error {
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return err
+	}
+
+	index := &indexBlock{
+		count: defaultIndexCount,
+		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+	}
+	offset, err := index.get(key)
+	if err != nil {
+		return err
+	}
+
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+	if offset != 0 { // index was found
+		offset, err := db.save(key, value)
+		if err != nil {
+			return err
+		}
+		if err := index.set(key, offset); err != nil {
+			return err
+		}
+	} else {
+		offset, err := db.update(offset, key, value)
+		if err := index.set(key, offset); err != nil {
+			return err
+		}
+	}
+}

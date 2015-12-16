@@ -12,8 +12,8 @@ const (
 	headerBlockSize       = 0x20              // 32 bytes
 	defaultIndexBlockSize = 1024 * 1024 * 16  // 16 MB
 	defaultDataBlockSize  = 1024 * 1024 * 256 // 256 MB
-	defaultIndexSize      = defaultIndexBlockSize / sizeOfUint32
 	defaultTotalSize      = headerBlockSize + defaultIndexBlockSize + defaultDataBlockSize
+	defaultIndexCount     = defaultIndexBlockSize / sizeOfUint32
 
 	// Max limits
 	maxIndexBlockSize = 1024 * 1024 * 128  // 128 MB
