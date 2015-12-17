@@ -79,6 +79,7 @@ func (c *config) getBytes(key string) ([]byte, error) {
 }
 
 func (c *config) set(key string, value []byte) error {
+	var err error
 	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
 	if err != nil {
 		return err
@@ -94,18 +95,26 @@ func (c *config) set(key string, value []byte) error {
 	}
 
 	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
-	if offset != 0 { // index was found
-		offset, err := db.save(key, value)
+	var newOffset = offset
+	if offset != 0 { // index was not found
+		newOffset, err = db.save(key, value)
 		if err != nil {
 			return err
 		}
-		if err := index.set(key, offset); err != nil {
-			return err
-		}
 	} else {
-		offset, err := db.update(offset, key, value)
-		if err := index.set(key, offset); err != nil {
+		newOffset, err = db.update(offset, key, value)
+		if err != nil {
 			return err
 		}
 	}
+
+	// Save the offset if it's changed.
+	if newOffset != offset {
+		err = index.set(key, offset)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
