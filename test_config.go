@@ -1,24 +1,30 @@
 package dyconf
 
-import "github.com/davecgh/go-spew/spew"
+import (
+	"fmt"
+	"time"
 
-func WriteTestConfig() []byte {
+	"github.com/davecgh/go-spew/spew"
+)
 
-	b := make([]byte, headerBlockSize)
+func WriteTestConfig() error {
+
+	c := defaultConfig
+	fmt.Println("Block length: ", len(c.block))
 	h := &headerBlock{
 		version:          123,
 		totalSize:        defaultTotalSize,
-		modifiedTime:     0x80809090,
-		indexBlockOffset: 0x44444444,
+		modifiedTime:     time.Now(),
+		indexBlockOffset: headerBlockSize,
 		indexBlockSize:   defaultIndexBlockSize,
-		dataBlockOffset:  0x88888888,
+		dataBlockOffset:  headerBlockSize + defaultIndexBlockSize,
 		dataBlockSize:    defaultDataBlockSize,
-		block:            b,
+		block:            c.block[0:headerBlockSize],
 	}
 	if err := h.save(); err != nil {
-		panic(err)
+		return err
 	}
-	return b
+	return nil
 }
 
 func ReadTestConfig(fileName string) {

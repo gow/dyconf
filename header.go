@@ -3,6 +3,7 @@ package dyconf
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookgo/stackerr"
@@ -23,7 +24,7 @@ const (
 type headerBlock struct {
 	version          uint32
 	totalSize        uint32
-	modifiedTime     int64
+	modifiedTime     time.Time
 	indexBlockOffset dataOffset
 	indexBlockSize   uint32
 	dataBlockOffset  dataOffset
@@ -51,9 +52,11 @@ func (h *headerBlock) read(block []byte) (*headerBlock, error) {
 		return nil, stackerr.Newf("headerBlock: failed to read the total size. error: [%s]", err.Error())
 	}
 
-	if err := binary.Read(buf, binary.LittleEndian, &h.modifiedTime); err != nil {
+	var timestamp int64
+	if err := binary.Read(buf, binary.LittleEndian, &timestamp); err != nil {
 		return nil, stackerr.Newf("headerBlock: failed to read the modified time. error: [%s]", err.Error())
 	}
+	h.modifiedTime = time.Unix(timestamp, 0)
 
 	if err := binary.Read(buf, binary.LittleEndian, &h.indexBlockOffset); err != nil {
 		return nil, stackerr.Newf("headerBlock: failed to read the index block offset. error: [%s]", err.Error())
@@ -86,10 +89,12 @@ func (h *headerBlock) save() error {
 		)
 	}
 
+	timestamp := h.modifiedTime.Unix()
+
 	buf := &writeBuffer{buf: h.block}
 	binary.Write(buf, binary.LittleEndian, h.version)
 	binary.Write(buf, binary.LittleEndian, h.totalSize)
-	binary.Write(buf, binary.LittleEndian, h.modifiedTime)
+	binary.Write(buf, binary.LittleEndian, timestamp)
 	binary.Write(buf, binary.LittleEndian, h.indexBlockOffset)
 	binary.Write(buf, binary.LittleEndian, h.indexBlockSize)
 	binary.Write(buf, binary.LittleEndian, h.dataBlockOffset)

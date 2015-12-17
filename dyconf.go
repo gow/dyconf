@@ -11,8 +11,16 @@ func Init(fileName string) error {
 	return defaultConfig.init(fileName)
 }
 
-func Get(key string) []byte {
-	panic("Implement me!")
+func Get(key string) ([]byte, error) {
+	return defaultConfig.getBytes(key)
+}
+
+func Set(key string, value []byte) error {
+	return defaultConfig.set(key, value)
+}
+
+func Close() error {
+	return defaultConfig.close()
 }
 
 type config struct {
@@ -31,10 +39,10 @@ func (c *config) init(fileName string) error {
 		return stackerr.Newf("dyconf: failed to open the file [%s]. error: [%s]", fileName, err.Error())
 	}
 	// read lock the file
-	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_SH); err != nil {
-		return stackerr.Newf("dyconf: failed to acquire read lock for file [%s]. error: [%s]", fileName, err.Error())
+	if err = c.rlock(); err != nil {
+		return err
 	}
-	defer syscall.Flock(int(c.file.Fd()), syscall.LOCK_UN)
+	defer c.unlock()
 
 	// mmap
 	c.block, err = syscall.Mmap(
@@ -52,6 +60,12 @@ func (c *config) init(fileName string) error {
 }
 
 func (c *config) getBytes(key string) ([]byte, error) {
+	// read lock the file
+	if err := c.rlock(); err != nil {
+		return nil, err
+	}
+	defer c.unlock()
+
 	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
 	if err != nil {
 		return nil, err
@@ -79,6 +93,12 @@ func (c *config) getBytes(key string) ([]byte, error) {
 }
 
 func (c *config) set(key string, value []byte) error {
+	// write lock the file
+	if err := c.wlock(); err != nil {
+		return err
+	}
+	defer c.unlock()
+
 	var err error
 	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
 	if err != nil {
@@ -117,4 +137,27 @@ func (c *config) set(key string, value []byte) error {
 
 	}
 	return nil
+}
+
+func (c *config) rlock() error {
+	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_SH); err != nil {
+		return stackerr.Newf("dyconf: failed to acquire read lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
+	}
+	return nil
+}
+func (c *config) wlock() error {
+	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_SH|syscall.LOCK_EX); err != nil {
+		return stackerr.Newf("dyconf: failed to acquire write lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
+	}
+	return nil
+}
+func (c *config) unlock() error {
+	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_UN); err != nil {
+		return stackerr.Newf("dyconf: failed to release the lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
+	}
+	return nil
+}
+
+func (c *config) close() error {
+	return c.file.Close()
 }
