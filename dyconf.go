@@ -71,6 +71,37 @@ func (c *config) write_init(fileName string) error {
 		return stackerr.Newf("dyconf: failed to open the file [%s]. error: [%s]", fileName, err.Error())
 	}
 
+	// We now seek to the end of the file and write an empty byte. This is to bloat the file upto the
+	// size we expect to mmap. If we don't do this mmap fails with the error "unexpected fault address"
+	seekOffset, err := c.file.Seek(int64(defaultTotalSize), 0)
+	if err != nil {
+		return stackerr.Newf(
+			"dyconf: failed to initialize for writing. Unexpected error occured while seeking to the "+
+				"end [%#v] of the config file [%s]. error: [%s]",
+			defaultTotalSize,
+			fileName,
+			err.Error(),
+		)
+	}
+	if seekOffset != defaultTotalSize {
+		return stackerr.Newf(
+			"dyconf: failed to initialize for writing. Could not seek the file [%s] till the "+
+				"required number of bytes [%#v]. Current seek offset: [%#v]",
+			fileName,
+			defaultTotalSize,
+			seekOffset,
+		)
+	}
+	_, err = c.file.Write([]byte("x"))
+	if err != nil {
+		return stackerr.Newf(
+			"dyconf: failed to initialize for writing. Could not write the empty byte at the "+
+				"end of the file [%s]. error: [%s]",
+			fileName,
+			err.Error(),
+		)
+	}
+
 	// write lock the file
 	if err = c.wlock(); err != nil {
 		return err
