@@ -11,8 +11,8 @@ import (
 
 const (
 	headerBlockSize       = 0x20              // 32 bytes
-	defaultIndexBlockSize = 1024 * 1024 * 16  // 16 MB
-	defaultDataBlockSize  = 1024 * 1024 * 256 // 256 MB
+	defaultIndexBlockSize = 1024 * 1024 * 4   // 4 MB
+	defaultDataBlockSize  = 1024 * 1024 * 128 // 128 MB
 	defaultTotalSize      = headerBlockSize + defaultIndexBlockSize + defaultDataBlockSize
 	defaultIndexCount     = defaultIndexBlockSize / sizeOfUint32
 

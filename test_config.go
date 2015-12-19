@@ -29,7 +29,7 @@ func WriteTestConfig() error {
 
 func ReadTestConfig(fileName string) {
 	c := &config{}
-	if err := c.init(fileName); err != nil {
+	if err := c.read_init(fileName); err != nil {
 		panic(err)
 	}
 

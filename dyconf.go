@@ -8,7 +8,11 @@ import (
 )
 
 func Init(fileName string) error {
-	return defaultConfig.init(fileName)
+	return defaultConfig.read_init(fileName)
+}
+
+func WriteInit(fileName string) error {
+	return defaultConfig.write_init(fileName)
 }
 
 func Get(key string) ([]byte, error) {
@@ -31,7 +35,7 @@ type config struct {
 
 var defaultConfig = &config{}
 
-func (c *config) init(fileName string) error {
+func (c *config) read_init(fileName string) error {
 	c.fileName = fileName
 	var err error
 	c.file, err = os.Open(fileName)
@@ -59,6 +63,34 @@ func (c *config) init(fileName string) error {
 	return nil
 }
 
+func (c *config) write_init(fileName string) error {
+	c.fileName = fileName
+	var err error
+	c.file, err = os.Create(fileName)
+	if err != nil {
+		return stackerr.Newf("dyconf: failed to open the file [%s]. error: [%s]", fileName, err.Error())
+	}
+
+	// write lock the file
+	if err = c.wlock(); err != nil {
+		return err
+	}
+	defer c.unlock()
+
+	// mmap
+	c.block, err = syscall.Mmap(
+		int(c.file.Fd()),
+		0,
+		int(defaultTotalSize),
+		syscall.PROT_WRITE,
+		syscall.MAP_SHARED,
+	)
+	if err != nil {
+		return stackerr.Newf("dyconf: failed to mmap the config file [%s]. error: [%s]", fileName, err.Error())
+	}
+
+	return nil
+}
 func (c *config) getBytes(key string) ([]byte, error) {
 	// read lock the file
 	if err := c.rlock(); err != nil {
@@ -146,7 +178,7 @@ func (c *config) rlock() error {
 	return nil
 }
 func (c *config) wlock() error {
-	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_SH|syscall.LOCK_EX); err != nil {
+	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_EX); err != nil {
 		return stackerr.Newf("dyconf: failed to acquire write lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
