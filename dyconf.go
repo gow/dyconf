@@ -23,6 +23,10 @@ func Set(key string, value []byte) error {
 	return defaultConfig.set(key, value)
 }
 
+func Delete(key string) error {
+	return defaultConfig.delete(key)
+}
+
 func Close() error {
 	return defaultConfig.close()
 }
@@ -153,6 +157,48 @@ func (c *config) getBytes(key string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+func (c *config) delete(key string) error {
+	// write lock the file
+	if err := c.wlock(); err != nil {
+		return err
+	}
+	defer c.unlock()
+
+	var err error
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return err
+	}
+
+	index := &indexBlock{
+		count: defaultIndexCount,
+		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+	}
+	offset, err := index.get(key)
+	if err != nil {
+		return err
+	}
+	if offset == 0 {
+		return stackerr.Newf("dyconf: cannot delete the key [%s]. it was not found in the index", key)
+	}
+
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+	newOffset, err := db.delete(offset, key)
+	if err != nil {
+		return err
+	}
+
+	// Save the offset if it's changed.
+	if newOffset != offset {
+		err = index.set(key, offset)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func (c *config) set(key string, value []byte) error {
