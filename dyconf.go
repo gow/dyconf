@@ -2,6 +2,7 @@ package dyconf
 
 import (
 	"os"
+	"sync"
 	"syscall"
 
 	"github.com/facebookgo/stackerr"
@@ -11,35 +12,55 @@ func Init(fileName string) error {
 	return defaultConfig.read_init(fileName)
 }
 
-func WriteInit(fileName string) error {
-	return defaultConfig.write_init(fileName)
-}
-
 func Get(key string) ([]byte, error) {
 	return defaultConfig.getBytes(key)
 }
 
-func Set(key string, value []byte) error {
-	return defaultConfig.set(key, value)
-}
-
-func Delete(key string) error {
-	return defaultConfig.delete(key)
-}
-
 func Close() error {
-	return defaultConfig.close()
+	return defaultConfig.Close()
 }
 
-type config struct {
+type ConfigReader interface {
+	Get(key string) ([]byte, error)
+	Init(fileName string) error
+	Close() error
+}
+
+type ConfigWriter interface {
+	Set(key string, value []byte) error
+	WriteInit(fileName string) error
+	Delete(key string) error
+	Close() error
+}
+
+type readConfig struct {
 	fileName string
 	file     *os.File
 	block    []byte
+	initOnce sync.Once
 }
 
-var defaultConfig = &config{}
+var defaultConfig = &readConfig{}
 
-func (c *config) read_init(fileName string) error {
+type writeConfig struct {
+	readConfig
+}
+
+func (c *readConfig) Init(fileName string) error {
+	var err error
+	return c.initOnce.Do(
+		func() {
+			err = c.read_init(fileName)
+		},
+	)
+	return err
+}
+
+func (c *readConfig) Get(key string) ([]byte, error) {
+	return c.getBytes(key)
+}
+
+func (c *readConfig) read_init(fileName string) error {
 	c.fileName = fileName
 	var err error
 	c.file, err = os.Open(fileName)
@@ -67,7 +88,40 @@ func (c *config) read_init(fileName string) error {
 	return nil
 }
 
-func (c *config) write_init(fileName string) error {
+func (c *readConfig) getBytes(key string) ([]byte, error) {
+	// read lock the file
+	if err := c.rlock(); err != nil {
+		return nil, err
+	}
+	defer c.unlock()
+
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return nil, err
+	}
+
+	index := &indexBlock{
+		count: defaultIndexCount,
+		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+	}
+	offset, err := index.get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if offset == 0 {
+		return nil, stackerr.Newf("dyconf: key [%s] was not found in the index", key)
+	}
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+	data, err := db.fetch(offset, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (c *writeConfig) write_init(fileName string) error {
 	c.fileName = fileName
 	var err error
 	c.file, err = os.Create(fileName)
@@ -126,40 +180,8 @@ func (c *config) write_init(fileName string) error {
 
 	return nil
 }
-func (c *config) getBytes(key string) ([]byte, error) {
-	// read lock the file
-	if err := c.rlock(); err != nil {
-		return nil, err
-	}
-	defer c.unlock()
 
-	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
-	if err != nil {
-		return nil, err
-	}
-
-	index := &indexBlock{
-		count: defaultIndexCount,
-		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
-	}
-	offset, err := index.get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	if offset == 0 {
-		return nil, stackerr.Newf("dyconf: key [%s] was not found in the index", key)
-	}
-	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
-	data, err := db.fetch(offset, key)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func (c *config) delete(key string) error {
+func (c *writeConfig) delete(key string) error {
 	// write lock the file
 	if err := c.wlock(); err != nil {
 		return err
@@ -201,7 +223,7 @@ func (c *config) delete(key string) error {
 	return nil
 }
 
-func (c *config) set(key string, value []byte) error {
+func (c *writeConfig) set(key string, value []byte) error {
 	// write lock the file
 	if err := c.wlock(); err != nil {
 		return err
@@ -248,25 +270,25 @@ func (c *config) set(key string, value []byte) error {
 	return nil
 }
 
-func (c *config) rlock() error {
+func (c *readConfig) rlock() error {
 	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_SH); err != nil {
 		return stackerr.Newf("dyconf: failed to acquire read lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
 }
-func (c *config) wlock() error {
+func (c *writeConfig) wlock() error {
 	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_EX); err != nil {
 		return stackerr.Newf("dyconf: failed to acquire write lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
 }
-func (c *config) unlock() error {
+func (c *readConfig) unlock() error {
 	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_UN); err != nil {
 		return stackerr.Newf("dyconf: failed to release the lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
 }
 
-func (c *config) close() error {
+func (c *readConfig) Close() error {
 	return c.file.Close()
 }
