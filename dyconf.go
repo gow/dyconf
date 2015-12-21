@@ -40,6 +40,15 @@ type readConfig struct {
 	initOnce sync.Once
 }
 
+func New(fileName string) (ConfigReader, error) {
+	c := &readConfig{}
+	err := c.Init(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 var defaultConfig = &readConfig{}
 
 type writeConfig struct {
@@ -48,7 +57,7 @@ type writeConfig struct {
 
 func (c *readConfig) Init(fileName string) error {
 	var err error
-	return c.initOnce.Do(
+	c.initOnce.Do(
 		func() {
 			err = c.read_init(fileName)
 		},
