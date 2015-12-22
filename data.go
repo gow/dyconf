@@ -53,7 +53,10 @@ func (db *dataBlock) getWriteOffset() (dataOffset, error) {
 	if err := binary.Read(buf, binary.LittleEndian, &offset); err != nil {
 		return 0, stackerr.Newf("dataBlock: unable to fetch current write offset. Err: [%s]", err.Error())
 	}
-	if offset < db.headerSize() {
+	if offset == 0x00 {
+		return dataOffset(dataBlockHeaderSize), nil
+	}
+	if offset > 0x00 && offset < db.headerSize() {
 		return 0, stackerr.Newf("dataBlock: invalid write offset [%#v]. It falls within header area [0x00 - %#v]", offset, db.headerSize())
 	}
 	return offset, nil

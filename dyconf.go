@@ -4,6 +4,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/facebookgo/stackerr"
 )
@@ -22,13 +23,11 @@ func Close() error {
 
 type ConfigReader interface {
 	Get(key string) ([]byte, error)
-	Init(fileName string) error
 	Close() error
 }
 
 type ConfigWriter interface {
 	Set(key string, value []byte) error
-	WriteInit(fileName string) error
 	Delete(key string) error
 	Close() error
 }
@@ -42,7 +41,7 @@ type readConfig struct {
 
 func New(fileName string) (ConfigReader, error) {
 	c := &readConfig{}
-	err := c.Init(fileName)
+	err := c.init(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +54,16 @@ type writeConfig struct {
 	readConfig
 }
 
-func (c *readConfig) Init(fileName string) error {
+func NewWriter(fileName string) (ConfigWriter, error) {
+	w := &writeConfig{}
+	err := w.write_init(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+func (c *readConfig) init(fileName string) error {
 	var err error
 	c.initOnce.Do(
 		func() {
@@ -187,10 +195,25 @@ func (c *writeConfig) write_init(fileName string) error {
 		return stackerr.Newf("dyconf: failed to mmap the config file [%s]. error: [%s]", fileName, err.Error())
 	}
 
+	// Save default header.
+	h := &headerBlock{
+		version:          123,
+		totalSize:        defaultTotalSize,
+		modifiedTime:     time.Now(),
+		indexBlockOffset: headerBlockSize,
+		indexBlockSize:   defaultIndexBlockSize,
+		dataBlockOffset:  headerBlockSize + defaultIndexBlockSize,
+		dataBlockSize:    defaultDataBlockSize,
+		block:            c.block[0:headerBlockSize],
+	}
+	if err != h.save() {
+		return err
+	}
+
 	return nil
 }
 
-func (c *writeConfig) delete(key string) error {
+func (c *writeConfig) Delete(key string) error {
 	// write lock the file
 	if err := c.wlock(); err != nil {
 		return err
@@ -227,12 +250,17 @@ func (c *writeConfig) delete(key string) error {
 		if err != nil {
 			return err
 		}
+	}
 
+	// Update when the time when the config was modified.
+	h.modifiedTime = time.Now()
+	if err := h.save(); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (c *writeConfig) set(key string, value []byte) error {
+func (c *writeConfig) Set(key string, value []byte) error {
 	// write lock the file
 	if err := c.wlock(); err != nil {
 		return err
@@ -256,7 +284,7 @@ func (c *writeConfig) set(key string, value []byte) error {
 
 	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
 	var newOffset = offset
-	if offset != 0 { // index was not found
+	if offset == 0 { // index was not found
 		newOffset, err = db.save(key, value)
 		if err != nil {
 			return err
@@ -270,11 +298,16 @@ func (c *writeConfig) set(key string, value []byte) error {
 
 	// Save the offset if it's changed.
 	if newOffset != offset {
-		err = index.set(key, offset)
+		err = index.set(key, newOffset)
 		if err != nil {
 			return err
 		}
+	}
 
+	// Update when the time when the config was modified.
+	h.modifiedTime = time.Now()
+	if err := h.save(); err != nil {
+		return err
 	}
 	return nil
 }
