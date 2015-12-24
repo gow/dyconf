@@ -125,14 +125,19 @@ func (c *readConfig) getBytes(key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// Key was not found in the index.
 	if offset == 0 {
-		return nil, stackerr.Newf("dyconf: key [%s] was not found in the index", key)
+		return nil, stackerr.Newf("dyconf: key [%s] was not found", key)
 	}
+
 	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
-	data, err := db.fetch(offset, key)
+	data, found, err := db.fetch(offset, key)
 	if err != nil {
 		return nil, err
+	}
+	// Key was not found in the data block.
+	if !found {
+		return nil, stackerr.Newf("dyconf: key [%s] was not found", key)
 	}
 
 	return data, nil
@@ -235,7 +240,7 @@ func (c *writeConfig) Delete(key string) error {
 		return err
 	}
 	if offset == 0 {
-		return stackerr.Newf("dyconf: cannot delete the key [%s]. it was not found in the index", key)
+		return nil // Key is not in the index. Nothing to delete.
 	}
 
 	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
@@ -246,7 +251,7 @@ func (c *writeConfig) Delete(key string) error {
 
 	// Save the offset if it's changed.
 	if newOffset != offset {
-		err = index.set(key, offset)
+		err = index.set(key, newOffset)
 		if err != nil {
 			return err
 		}

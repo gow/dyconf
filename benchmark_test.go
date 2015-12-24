@@ -2,13 +2,73 @@ package dyconf
 
 import (
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net"
 	"net/rpc"
 	"os"
 	"sync"
 	"syscall"
 	"testing"
+
+	"github.com/facebookgo/ensure"
 )
+
+func BenchmarkDyconfSet(b *testing.B) {
+	// Setup
+	tmpFile, err := ioutil.TempFile("", "dyconf-BenchMarkDyconfSet")
+	ensure.Nil(b, err)
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpFileName)
+
+	// Set the keys in the given sequence.
+	wc, err := NewWriter(tmpFileName)
+	ensure.Nil(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		val := fmt.Sprintf("value-%d", i)
+		err = wc.Set(key, []byte(val))
+		if err != nil {
+			break
+		}
+	}
+	ensure.Nil(b, err)
+}
+
+func BenchmarkDyconfGet(b *testing.B) {
+	// Setup
+	tmpFile, err := ioutil.TempFile("", "dyconf-BenchMarkDyconfGet")
+	ensure.Nil(b, err)
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpFileName)
+
+	// Set the keys in the given sequence.
+	wc, err := NewWriter(tmpFileName)
+	ensure.Nil(b, err)
+
+	conf, err := New(tmpFileName)
+	ensure.Nil(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		key := fmt.Sprintf("key-%d", i)
+		val := fmt.Sprintf("value-%d", i)
+		err = wc.Set(key, []byte(val))
+		if err != nil {
+			break
+		}
+
+		b.StartTimer()
+		_, err = conf.Get(key)
+		if err != nil {
+			break
+		}
+	}
+	ensure.Nil(b, err)
+}
 
 /***************** Flock ********************/
 func BenchmarkFlockRead(b *testing.B) {

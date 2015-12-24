@@ -3,6 +3,7 @@ package dyconf
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"regexp"
 	"testing"
 
@@ -27,6 +28,7 @@ func TestDyconfSetAndGet(t *testing.T) {
 		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 		tmpFileName := tmpFile.Name()
 		tmpFile.Close()
+		defer os.Remove(tmpFileName)
 
 		// Set the keys.
 		wc, err := NewWriter(tmpFileName)
@@ -68,6 +70,7 @@ func TestDyconfOverwrite(t *testing.T) {
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
+	defer os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewWriter(tmpFileName)
@@ -112,6 +115,7 @@ func TestDyconfCollisions(t *testing.T) {
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
+	defer os.Remove(tmpFileName)
 
 	// replace hashing function.
 	savedHashfunc := defaultHashFunc
@@ -156,7 +160,7 @@ func TestDyconfDelete(t *testing.T) {
 		{key: "key-2", val: []byte("Value-2")},
 		{key: "One More Non deleted key", val: []byte("One more Non deleted value")},
 	}
-	deleteKeys := []string{"key-1", "key-2", "key-3"}
+	deleteKeys := []string{"key-1", "key-2", "key-3", "NonExistingKey"}
 	expected := map[string][]byte{
 		"Non deleted key":          []byte("Non deleted value"),
 		"One More Non deleted key": []byte("One more Non deleted value"),
@@ -167,6 +171,7 @@ func TestDyconfDelete(t *testing.T) {
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
+	defer os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewWriter(tmpFileName)
@@ -186,8 +191,8 @@ func TestDyconfDelete(t *testing.T) {
 	ensure.Nil(t, err)
 	for _, delKey := range deleteKeys {
 		val, err := conf.Get(delKey)
-		ensure.Nil(t, val)
-		ensure.Err(t, err, regexp.MustCompile("qwerty"))
+		ensure.Err(t, err, regexp.MustCompile(`^dyconf: key .* was not found.*`))
+		ensure.True(t, (val == nil))
 	}
 
 	// expected key-value pairs must be present.
@@ -196,4 +201,80 @@ func TestDyconfDelete(t *testing.T) {
 		ensure.Nil(t, err)
 		ensure.DeepEqual(t, val, expectedVal)
 	}
+}
+
+func TestDyconfDeleteWithCollisions(t *testing.T) {
+	setSequence := []struct {
+		key string
+		val []byte
+	}{
+		{key: "key-1", val: []byte("big value 1")},
+		{key: "key-1", val: []byte("Bigger Value 1")},
+		{key: "key-1", val: []byte("Bigger Value 2")},
+		{key: "Non deleted key", val: []byte("Non deleted value")},
+		{key: "key-1", val: []byte("very big value 1")},
+		{key: "key-2", val: []byte("Value-222")},
+		{key: "key-3", val: []byte("Value-3")},
+		{key: "key-1", val: []byte("smallval")},
+		{key: "key-2", val: []byte("Value-2")},
+		{key: "One More Non deleted key", val: []byte("One more Non deleted value")},
+	}
+	deleteKeys := []string{"key-1", "key-2", "key-3", "NonExistingKey"}
+	expected := map[string][]byte{
+		"Non deleted key":          []byte("Non deleted value"),
+		"One More Non deleted key": []byte("One more Non deleted value"),
+	}
+
+	// Setup
+	tmpFile, err := ioutil.TempFile("", "dyconf-TestDyconfCollisions")
+	ensure.Nil(t, err)
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpFileName)
+
+	// replace hashing function.
+	savedHashfunc := defaultHashFunc
+	defaultHashFunc = func(key string) (uint32, error) {
+		i, err := savedHashfunc(key)
+		return i % 2, err // Everything falls into either bucket 0 or 1
+	}
+	defer func() {
+		defaultHashFunc = savedHashfunc // restore
+	}()
+
+	// Set the keys in the given sequence.
+	wc, err := NewWriter(tmpFileName)
+	ensure.Nil(t, err)
+	for _, kvPair := range setSequence {
+		err = wc.Set(kvPair.key, kvPair.val)
+		ensure.Nil(t, err)
+	}
+	// delete the keys.
+	for _, delKey := range deleteKeys {
+		err = wc.Delete(delKey)
+		ensure.Nil(t, err)
+	}
+
+	// deleted keys must be gone.
+	conf, err := New(tmpFileName)
+	ensure.Nil(t, err)
+	for _, delKey := range deleteKeys {
+		val, err := conf.Get(delKey)
+		ensure.Err(t, err, regexp.MustCompile(`^dyconf: key .* was not found.*`))
+		ensure.True(t, (val == nil))
+	}
+
+	// expected key-value pairs must be present.
+	for key, expectedVal := range expected {
+		val, err := conf.Get(key)
+		ensure.Nil(t, err)
+		ensure.DeepEqual(t, val, expectedVal)
+	}
+}
+
+func TestDyconfInitErrors(t *testing.T) {
+	// try opening a non existing file.
+	conf, err := New("/tmp/dyconf-nonexisting-rkkbnbrejhhfellgkrhleuhutncdejvr")
+	ensure.Err(t, err, regexp.MustCompile(`^dyconf: failed to open the file.*`))
+	ensure.Nil(t, conf)
 }

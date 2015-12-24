@@ -21,7 +21,7 @@ const (
 type dataStore interface {
 	save(key string, data []byte) (dataOffset, error)
 	update(start dataOffset, key string, data []byte) (dataOffset, error)
-	fetch(start dataOffset, key string) ([]byte, error)
+	fetch(start dataOffset, key string) ([]byte, bool, error)
 	reset() error
 }
 
@@ -132,18 +132,18 @@ func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
 	return offset, nil
 }
 
-func (db *dataBlock) fetch(start dataOffset, key string) ([]byte, error) {
+func (db *dataBlock) fetch(start dataOffset, key string) ([]byte, bool, error) {
 	rec, _, _, err := db.find(start, key)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if rec != nil { // record was found.
-		return rec.data, nil
+		return rec.data, true, nil
 	}
 
 	// record was not found.
-	return nil, stackerr.Newf("dataBlock: key [%s] was not found starting at [%x]", key, start)
+	return nil, false, nil
 }
 
 func (db *dataBlock) readRecordFrom(start dataOffset) (*dataRecord, error) {
@@ -302,8 +302,8 @@ func (db *dataBlock) delete(start dataOffset, key string) (dataOffset, error) {
 		return 0, err
 	}
 
-	if rec == nil {
-		return 0, stackerr.Newf("dataBlock: cannot delete key [%d]. It was not found in the list starting at [%#v]", key, start)
+	if rec == nil { // The record was not found in the list. Nothing to do here.
+		return start, nil
 	}
 
 	// rec is at the start of the list.

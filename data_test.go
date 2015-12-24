@@ -79,8 +79,9 @@ func TestDataBlockFetch(t *testing.T) {
 	}
 
 	for i, tc := range cases {
-		data, err := tc.db.fetch(tc.startOffset, tc.key)
+		data, found, err := tc.db.fetch(tc.startOffset, tc.key)
 		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
+		ensure.True(t, found, fmt.Sprintf("Case: [%d]", i))
 		ensure.DeepEqual(t, data, tc.expectedBytes, fmt.Sprintf("Case: [%d]", i))
 	}
 }
@@ -122,21 +123,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 			key:            "NonExistingKey",
 			expectedErrStr: `^dataBlock: Cannot read out of bound offset \[0xff\]*`,
 		},
-		{ // Case-3: Key is not found.
-			db: &dataBlock{
-				block: concatBytes(
-					headerBytes(),
-					[]byte{
-						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
-						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
-					},
-				),
-			},
-			startOffset:    0x10,
-			key:            "NonExistingKey",
-			expectedErrStr: `^dataBlock: key \[NonExistingKey\] was not found starting at \[10\]*`,
-		},
-		{ // Case-4: key size exceeds max key size
+		{ // Case-3: key size exceeds max key size
 			db: &dataBlock{
 				block: concatBytes(
 					headerBytes(),
@@ -150,7 +137,7 @@ func TestDataBlockFetchErrors(t *testing.T) {
 			key:            "NonExistingKey",
 			expectedErrStr: `^dataRecord: failed to read the key \(size=0x10001\). It exceeds max size \[0x10000\]*`,
 		},
-		{ // Case-5: data size exceeds max key size
+		{ // Case-4: data size exceeds max data size
 			db: &dataBlock{
 				block: concatBytes(
 					headerBytes(),
@@ -167,10 +154,41 @@ func TestDataBlockFetchErrors(t *testing.T) {
 	}
 
 	for i, tc := range cases {
-		data, err := tc.db.fetch(tc.startOffset, tc.key)
+		data, found, err := tc.db.fetch(tc.startOffset, tc.key)
 		ensure.True(t, (data == nil), fmt.Sprintf("Case: [%d]", i))
-		//ensure.DeepEqual(t, data, tc.expectedBytes, fmt.Sprintf("Case: [%d]", i))
+		ensure.False(t, found, fmt.Sprintf("Case: [%d]", i))
 		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr), fmt.Sprintf("Case: [%d]", i))
+	}
+}
+
+func TestDataBlockFetchNonExisting(t *testing.T) {
+	cases := []struct {
+		db             *dataBlock
+		startOffset    dataOffset
+		key            string
+		expectedErrStr string
+	}{
+		{ // Case-0: Key is not found.
+			db: &dataBlock{
+				block: concatBytes(
+					headerBytes(),
+					[]byte{
+						0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // key size (2), data size (2)
+						0x41, 0x41, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00, // key (AA), Data (11), next(0x00)
+					},
+				),
+			},
+			startOffset:    0x10,
+			key:            "NonExistingKey",
+			expectedErrStr: `^dataBlock: key \[NonExistingKey\] was not found starting at \[10\]*`,
+		},
+	}
+
+	for i, tc := range cases {
+		data, found, err := tc.db.fetch(tc.startOffset, tc.key)
+		ensure.True(t, (data == nil), fmt.Sprintf("Case: [%d]", i))
+		ensure.False(t, found, fmt.Sprintf("Case: [%d]", i))
+		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 	}
 }
 
