@@ -29,6 +29,7 @@ type ConfigReader interface {
 type ConfigWriter interface {
 	Set(key string, value []byte) error
 	Delete(key string) error
+	//AvailableBytes() int64
 	Close() error
 }
 
@@ -143,13 +144,20 @@ func (c *readConfig) getBytes(key string) ([]byte, error) {
 	return data, nil
 }
 
-func (c *writeConfig) write_init(fileName string) error {
+func (c *writeConfig) create_new(fileName string) error {
 	c.fileName = fileName
 	var err error
+
 	c.file, err = os.Create(fileName)
 	if err != nil {
-		return stackerr.Newf("dyconf: failed to open the file [%s]. error: [%s]", fileName, err.Error())
+		return stackerr.Newf("dyconf: failed to create the file [%s]. error: [%s]", fileName, err.Error())
 	}
+
+	// write lock the file
+	if err = c.wlock(); err != nil {
+		return err
+	}
+	defer c.unlock()
 
 	// We now seek to the end of the file and write an empty byte. This is to bloat the file upto the
 	// size we expect to mmap. If we don't do this mmap fails with the error "unexpected fault address"
@@ -172,7 +180,7 @@ func (c *writeConfig) write_init(fileName string) error {
 			seekOffset,
 		)
 	}
-	_, err = c.file.Write([]byte("x"))
+	_, err = c.file.Write([]byte{0x00})
 	if err != nil {
 		return stackerr.Newf(
 			"dyconf: failed to initialize for writing. Could not write the empty byte at the "+
@@ -181,13 +189,6 @@ func (c *writeConfig) write_init(fileName string) error {
 			err.Error(),
 		)
 	}
-
-	// write lock the file
-	if err = c.wlock(); err != nil {
-		return err
-	}
-	defer c.unlock()
-
 	// mmap
 	c.block, err = syscall.Mmap(
 		int(c.file.Fd()),
@@ -213,6 +214,54 @@ func (c *writeConfig) write_init(fileName string) error {
 	}
 	if err != h.save() {
 		return err
+	}
+
+	return nil
+
+}
+
+func (c *writeConfig) write_init(fileName string) error {
+	c.fileName = fileName
+	var err error
+	var existingFileSize int64
+
+	stat, err := os.Stat(fileName)
+	if os.IsNotExist(err) {
+		return c.create_new(fileName)
+	}
+
+	c.file, err = os.OpenFile(fileName, os.O_RDWR, 0777)
+	if err != nil {
+		return stackerr.Newf("dyconf: failed to open the file [%s]. error: [%s]", fileName, err.Error())
+	}
+	existingFileSize = stat.Size()
+
+	// write lock the file
+	if err = c.wlock(); err != nil {
+		return err
+	}
+	defer c.unlock()
+
+	if existingFileSize != int64(defaultTotalSize) {
+		return stackerr.Newf(
+			"dyconf: failed to initialize the existing config file [%s]. The file size [%x] should be %x. "+
+				"Either fix the file or delete it to discard all data and try again.",
+			fileName,
+			existingFileSize,
+			defaultTotalSize,
+		)
+	}
+
+	// mmap
+	c.block, err = syscall.Mmap(
+		int(c.file.Fd()),
+		0,
+		int(defaultTotalSize),
+		syscall.PROT_WRITE,
+		syscall.MAP_SHARED,
+	)
+	if err != nil {
+		return stackerr.Newf("dyconf: failed to mmap the config file [%s]. error: [%s]", fileName, err.Error())
 	}
 
 	return nil
@@ -337,5 +386,10 @@ func (c *readConfig) unlock() error {
 }
 
 func (c *readConfig) Close() error {
+	c.rlock()
+	defer c.unlock()
+	if err := syscall.Munmap(c.block); err != nil {
+		return err
+	}
 	return c.file.Close()
 }

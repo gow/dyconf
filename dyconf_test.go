@@ -10,7 +10,7 @@ import (
 	"github.com/facebookgo/ensure"
 )
 
-func TestDyconfSetAndGet(t *testing.T) {
+func TestDyconfSetGetClose(t *testing.T) {
 	cases := []struct {
 		data map[string][]byte
 	}{
@@ -24,11 +24,11 @@ func TestDyconfSetAndGet(t *testing.T) {
 	}
 
 	for i, tc := range cases {
-		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("dyconf-TestGet-Case-%d", i))
+		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("TestDyconfSetGetClose-Case-%d", i))
 		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 		tmpFileName := tmpFile.Name()
 		tmpFile.Close()
-		defer os.Remove(tmpFileName)
+		os.Remove(tmpFileName)
 
 		// Set the keys.
 		wc, err := NewWriter(tmpFileName)
@@ -46,6 +46,14 @@ func TestDyconfSetAndGet(t *testing.T) {
 			ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 			ensure.DeepEqual(t, val, expectedVal, fmt.Sprintf("Case: [%d]", i))
 		}
+
+		// Close the writer.
+		err = wc.Close()
+		ensure.Nil(t, err, fmt.Sprintf("Case-%d", i))
+
+		// Close the reader.
+		err = conf.Close()
+		ensure.Nil(t, err, fmt.Sprintf("Case-%d", i))
 	}
 }
 
@@ -66,11 +74,11 @@ func TestDyconfOverwrite(t *testing.T) {
 		"some other key": []byte("some other value"),
 	}
 
-	tmpFile, err := ioutil.TempFile("", "dyconf-TestDyconfOverwrite")
+	tmpFile, err := ioutil.TempFile("", "TestDyconfOverwrite")
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewWriter(tmpFileName)
@@ -88,6 +96,11 @@ func TestDyconfOverwrite(t *testing.T) {
 		ensure.Nil(t, err)
 		ensure.DeepEqual(t, val, expectedVal)
 	}
+
+	err = conf.Close()
+	ensure.Nil(t, err)
+	err = wc.Close()
+	ensure.Nil(t, err)
 }
 
 func TestDyconfCollisions(t *testing.T) {
@@ -111,11 +124,11 @@ func TestDyconfCollisions(t *testing.T) {
 	}
 
 	// Setup
-	tmpFile, err := ioutil.TempFile("", "dyconf-TestDyconfCollisions")
+	tmpFile, err := ioutil.TempFile("", "TestDyconfCollisions")
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	os.Remove(tmpFileName)
 
 	// replace hashing function.
 	savedHashfunc := defaultHashFunc
@@ -142,6 +155,11 @@ func TestDyconfCollisions(t *testing.T) {
 		ensure.Nil(t, err)
 		ensure.DeepEqual(t, val, expectedVal)
 	}
+
+	err = conf.Close()
+	ensure.Nil(t, err)
+	err = wc.Close()
+	ensure.Nil(t, err)
 }
 
 func TestDyconfDelete(t *testing.T) {
@@ -167,11 +185,11 @@ func TestDyconfDelete(t *testing.T) {
 	}
 
 	// Setup
-	tmpFile, err := ioutil.TempFile("", "dyconf-TestDyconfCollisions")
+	tmpFile, err := ioutil.TempFile("", "TestDyconfDelete")
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewWriter(tmpFileName)
@@ -201,6 +219,12 @@ func TestDyconfDelete(t *testing.T) {
 		ensure.Nil(t, err)
 		ensure.DeepEqual(t, val, expectedVal)
 	}
+
+	// Close.
+	err = conf.Close()
+	ensure.Nil(t, err)
+	err = wc.Close()
+	ensure.Nil(t, err)
 }
 
 func TestDyconfDeleteWithCollisions(t *testing.T) {
@@ -226,11 +250,11 @@ func TestDyconfDeleteWithCollisions(t *testing.T) {
 	}
 
 	// Setup
-	tmpFile, err := ioutil.TempFile("", "dyconf-TestDyconfCollisions")
+	tmpFile, err := ioutil.TempFile("", "TestDyconfDeleteWithCollisions")
 	ensure.Nil(t, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	os.Remove(tmpFileName)
 
 	// replace hashing function.
 	savedHashfunc := defaultHashFunc
@@ -270,6 +294,12 @@ func TestDyconfDeleteWithCollisions(t *testing.T) {
 		ensure.Nil(t, err)
 		ensure.DeepEqual(t, val, expectedVal)
 	}
+
+	// Close.
+	err = conf.Close()
+	ensure.Nil(t, err)
+	err = wc.Close()
+	ensure.Nil(t, err)
 }
 
 func TestDyconfInitErrors(t *testing.T) {
@@ -277,4 +307,23 @@ func TestDyconfInitErrors(t *testing.T) {
 	conf, err := New("/tmp/dyconf-nonexisting-rkkbnbrejhhfellgkrhleuhutncdejvr")
 	ensure.Err(t, err, regexp.MustCompile(`^dyconf: failed to open the file.*`))
 	ensure.Nil(t, conf)
+}
+
+func TestDyconfWriteInitNewFile(t *testing.T) {
+	// Create the file first.
+	tmpFile, err := ioutil.TempFile("", "TestDyconfWriteInitNewFile")
+	ensure.Nil(t, err)
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	os.Remove(tmpFileName)
+
+	// Initialize the writer.
+	wc, err := NewWriter(tmpFileName)
+	ensure.Nil(t, err)
+	ensure.Nil(t, wc.Close())
+
+	// Make sure the file is created and then delete it.
+	_, err = os.Stat(tmpFileName)
+	ensure.Nil(t, err)
+	ensure.Nil(t, os.Remove(tmpFileName))
 }
