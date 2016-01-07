@@ -20,7 +20,7 @@ func BenchmarkDyconfSet(b *testing.B) {
 	ensure.Nil(b, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewWriter(tmpFileName)
@@ -43,7 +43,7 @@ func BenchmarkDyconfGet(b *testing.B) {
 	ensure.Nil(b, err)
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewWriter(tmpFileName)
