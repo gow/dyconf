@@ -26,7 +26,7 @@ type Config interface {
 	Close() error
 }
 
-type ConfigWriter interface {
+type ConfigManager interface {
 	Set(key string, value []byte) error
 	Delete(key string) error
 	Close() error
@@ -54,7 +54,7 @@ type configManager struct {
 	config
 }
 
-func NewManager(fileName string) (ConfigWriter, error) {
+func NewManager(fileName string) (ConfigManager, error) {
 	w := &configManager{}
 	err := w.write_init(fileName)
 	if err != nil {
