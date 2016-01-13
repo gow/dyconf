@@ -9,18 +9,6 @@ import (
 	"github.com/facebookgo/stackerr"
 )
 
-func Init(fileName string) error {
-	return defaultConfig.read_init(fileName)
-}
-
-func Get(key string) ([]byte, error) {
-	return defaultConfig.getBytes(key)
-}
-
-func Close() error {
-	return defaultConfig.Close()
-}
-
 type Config interface {
 	Get(key string) ([]byte, error)
 	Close() error
@@ -48,8 +36,6 @@ func New(fileName string) (Config, error) {
 	return c, nil
 }
 
-var defaultConfig = &config{}
-
 type configManager struct {
 	config
 }
@@ -63,21 +49,11 @@ func NewManager(fileName string) (ConfigManager, error) {
 	return w, nil
 }
 
-func (c *config) init(fileName string) error {
-	var err error
-	c.initOnce.Do(
-		func() {
-			err = c.read_init(fileName)
-		},
-	)
-	return err
-}
-
 func (c *config) Get(key string) ([]byte, error) {
 	return c.getBytes(key)
 }
 
-func (c *config) read_init(fileName string) error {
+func (c *config) init(fileName string) error {
 	c.fileName = fileName
 	var err error
 	c.file, err = os.Open(fileName)
