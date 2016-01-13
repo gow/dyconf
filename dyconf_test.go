@@ -31,7 +31,7 @@ func TestDyconfSetGetClose(t *testing.T) {
 		os.Remove(tmpFileName)
 
 		// Set the keys.
-		wc, err := NewWriter(tmpFileName)
+		wc, err := NewManager(tmpFileName)
 		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
 		for key, val := range tc.data {
 			err = wc.Set(key, val)
@@ -81,7 +81,7 @@ func TestDyconfOverwrite(t *testing.T) {
 	os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
-	wc, err := NewWriter(tmpFileName)
+	wc, err := NewManager(tmpFileName)
 	ensure.Nil(t, err)
 	for _, kvPair := range setSequence {
 		err = wc.Set(kvPair.key, kvPair.val)
@@ -140,7 +140,7 @@ func TestDyconfCollisions(t *testing.T) {
 	}()
 
 	// Set the keys in the given sequence.
-	wc, err := NewWriter(tmpFileName)
+	wc, err := NewManager(tmpFileName)
 	ensure.Nil(t, err)
 	for _, kvPair := range setSequence {
 		err = wc.Set(kvPair.key, kvPair.val)
@@ -192,7 +192,7 @@ func TestDyconfDelete(t *testing.T) {
 	os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
-	wc, err := NewWriter(tmpFileName)
+	wc, err := NewManager(tmpFileName)
 	ensure.Nil(t, err)
 	for _, kvPair := range setSequence {
 		err = wc.Set(kvPair.key, kvPair.val)
@@ -267,7 +267,7 @@ func TestDyconfDeleteWithCollisions(t *testing.T) {
 	}()
 
 	// Set the keys in the given sequence.
-	wc, err := NewWriter(tmpFileName)
+	wc, err := NewManager(tmpFileName)
 	ensure.Nil(t, err)
 	for _, kvPair := range setSequence {
 		err = wc.Set(kvPair.key, kvPair.val)
@@ -318,7 +318,7 @@ func TestDyconfWriteInitNewFile(t *testing.T) {
 	os.Remove(tmpFileName)
 
 	// Initialize the writer.
-	wc, err := NewWriter(tmpFileName)
+	wc, err := NewManager(tmpFileName)
 	ensure.Nil(t, err)
 	ensure.Nil(t, wc.Close())
 

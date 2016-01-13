@@ -21,7 +21,7 @@ func Close() error {
 	return defaultConfig.Close()
 }
 
-type ConfigReader interface {
+type Config interface {
 	Get(key string) ([]byte, error)
 	Close() error
 }
@@ -29,19 +29,18 @@ type ConfigReader interface {
 type ConfigWriter interface {
 	Set(key string, value []byte) error
 	Delete(key string) error
-	//AvailableBytes() int64
 	Close() error
 }
 
-type readConfig struct {
+type config struct {
 	fileName string
 	file     *os.File
 	block    []byte
 	initOnce sync.Once
 }
 
-func New(fileName string) (ConfigReader, error) {
-	c := &readConfig{}
+func New(fileName string) (Config, error) {
+	c := &config{}
 	err := c.init(fileName)
 	if err != nil {
 		return nil, err
@@ -49,14 +48,14 @@ func New(fileName string) (ConfigReader, error) {
 	return c, nil
 }
 
-var defaultConfig = &readConfig{}
+var defaultConfig = &config{}
 
-type writeConfig struct {
-	readConfig
+type configManager struct {
+	config
 }
 
-func NewWriter(fileName string) (ConfigWriter, error) {
-	w := &writeConfig{}
+func NewManager(fileName string) (ConfigWriter, error) {
+	w := &configManager{}
 	err := w.write_init(fileName)
 	if err != nil {
 		return nil, err
@@ -64,7 +63,7 @@ func NewWriter(fileName string) (ConfigWriter, error) {
 	return w, nil
 }
 
-func (c *readConfig) init(fileName string) error {
+func (c *config) init(fileName string) error {
 	var err error
 	c.initOnce.Do(
 		func() {
@@ -74,11 +73,11 @@ func (c *readConfig) init(fileName string) error {
 	return err
 }
 
-func (c *readConfig) Get(key string) ([]byte, error) {
+func (c *config) Get(key string) ([]byte, error) {
 	return c.getBytes(key)
 }
 
-func (c *readConfig) read_init(fileName string) error {
+func (c *config) read_init(fileName string) error {
 	c.fileName = fileName
 	var err error
 	c.file, err = os.Open(fileName)
@@ -106,7 +105,7 @@ func (c *readConfig) read_init(fileName string) error {
 	return nil
 }
 
-func (c *readConfig) getBytes(key string) ([]byte, error) {
+func (c *config) getBytes(key string) ([]byte, error) {
 	// read lock the file
 	if err := c.rlock(); err != nil {
 		return nil, err
@@ -144,7 +143,7 @@ func (c *readConfig) getBytes(key string) ([]byte, error) {
 	return data, nil
 }
 
-func (c *writeConfig) create_new(fileName string) error {
+func (c *configManager) create_new(fileName string) error {
 	c.fileName = fileName
 	var err error
 
@@ -220,7 +219,7 @@ func (c *writeConfig) create_new(fileName string) error {
 
 }
 
-func (c *writeConfig) write_init(fileName string) error {
+func (c *configManager) write_init(fileName string) error {
 	c.fileName = fileName
 	var err error
 	var existingFileSize int64
@@ -267,7 +266,7 @@ func (c *writeConfig) write_init(fileName string) error {
 	return nil
 }
 
-func (c *writeConfig) Delete(key string) error {
+func (c *configManager) Delete(key string) error {
 	// write lock the file
 	if err := c.wlock(); err != nil {
 		return err
@@ -314,7 +313,7 @@ func (c *writeConfig) Delete(key string) error {
 	return nil
 }
 
-func (c *writeConfig) Set(key string, value []byte) error {
+func (c *configManager) Set(key string, value []byte) error {
 	// write lock the file
 	if err := c.wlock(); err != nil {
 		return err
@@ -366,26 +365,26 @@ func (c *writeConfig) Set(key string, value []byte) error {
 	return nil
 }
 
-func (c *readConfig) rlock() error {
+func (c *config) rlock() error {
 	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_SH); err != nil {
 		return stackerr.Newf("dyconf: failed to acquire read lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
 }
-func (c *writeConfig) wlock() error {
+func (c *configManager) wlock() error {
 	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_EX); err != nil {
 		return stackerr.Newf("dyconf: failed to acquire write lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
 }
-func (c *readConfig) unlock() error {
+func (c *config) unlock() error {
 	if err := syscall.Flock(int(c.file.Fd()), syscall.LOCK_UN); err != nil {
 		return stackerr.Newf("dyconf: failed to release the lock for file [%s]. error: [%s]", c.file.Name(), err.Error())
 	}
 	return nil
 }
 
-func (c *readConfig) Close() error {
+func (c *config) Close() error {
 	c.rlock()
 	defer c.unlock()
 	if err := syscall.Munmap(c.block); err != nil {
