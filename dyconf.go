@@ -17,6 +17,7 @@ type Config interface {
 type ConfigManager interface {
 	Set(key string, value []byte) error
 	Delete(key string) error
+	Map() (map[string][]byte, error)
 	Close() error
 }
 
@@ -94,8 +95,8 @@ func (c *config) getBytes(key string) ([]byte, error) {
 	}
 
 	index := &indexBlock{
-		count: defaultIndexCount,
-		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+		size: defaultIndexCount,
+		data: c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
 	}
 	offset, err := index.get(key)
 	if err != nil {
@@ -192,7 +193,6 @@ func (c *configManager) create_new(fileName string) error {
 	}
 
 	return nil
-
 }
 
 func (c *configManager) write_init(fileName string) error {
@@ -256,8 +256,8 @@ func (c *configManager) Delete(key string) error {
 	}
 
 	index := &indexBlock{
-		count: defaultIndexCount,
-		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+		size: defaultIndexCount,
+		data: c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
 	}
 	offset, err := index.get(key)
 	if err != nil {
@@ -303,8 +303,8 @@ func (c *configManager) Set(key string, value []byte) error {
 	}
 
 	index := &indexBlock{
-		count: defaultIndexCount,
-		data:  c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+		size: defaultIndexCount,
+		data: c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
 	}
 	offset, err := index.get(key)
 	if err != nil {
@@ -339,6 +339,36 @@ func (c *configManager) Set(key string, value []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (c *configManager) Map() (map[string][]byte, error) {
+	ret := make(map[string][]byte)
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return nil, err
+	}
+
+	index := &indexBlock{
+		size: defaultIndexCount,
+		data: c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+	}
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+
+	offsets, err := index.getAll()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, offset := range offsets {
+		kv, err := db.fetchAll(offset)
+		if err != nil {
+			return nil, err
+		}
+		for key, val := range kv {
+			ret[key] = val
+		}
+	}
+	return ret, nil
 }
 
 func (c *config) rlock() error {

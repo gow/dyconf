@@ -14,8 +14,8 @@ const (
 	maxKeySize          = uint32(0x01 << 16) // 65 KB
 	maxDataSize         = uint32(0x01 << 27) // 128 MB
 
-	headerWriteOffset     = 0x00 // write offset is saved here.
-	headerTotalSizeOffset = 0x04 // total used size is saved here.
+	headerWriteOffset = 0x00 // write offset is saved here.
+	dataSizeOffset    = 0x04 // total used size is saved here.
 )
 
 type dataStore interface {
@@ -33,7 +33,7 @@ func (db *dataBlock) reset() error {
 	if err := db.updateWriteOffset(db.headerSize()); err != nil {
 		return err
 	}
-	db.updateTotalSize(0)
+	db.updateSize(0)
 	return nil
 }
 
@@ -62,8 +62,8 @@ func (db *dataBlock) getWriteOffset() (dataOffset, error) {
 	return offset, nil
 }
 
-func (db *dataBlock) totalSize() (uint32, error) {
-	buf := bytes.NewReader(db.block[headerTotalSizeOffset : headerTotalSizeOffset+sizeOfUint32])
+func (db *dataBlock) size() (uint32, error) {
+	buf := bytes.NewReader(db.block[dataSizeOffset : dataSizeOffset+sizeOfUint32])
 	var size uint32
 	if err := binary.Read(buf, binary.LittleEndian, &size); err != nil {
 		return 0, stackerr.Newf("dataBlock: unable to fetch total size. Err: [%s]", err.Error())
@@ -71,30 +71,30 @@ func (db *dataBlock) totalSize() (uint32, error) {
 	return size, nil
 }
 
-func (db *dataBlock) incrTotalSize(inc uint32) (uint32, error) {
-	size, err := db.totalSize()
+func (db *dataBlock) incrSize(inc uint32) (uint32, error) {
+	size, err := db.size()
 	if err != nil {
 		return 0, err
 	}
-	if err := db.updateTotalSize(size + inc); err != nil {
+	if err := db.updateSize(size + inc); err != nil {
 		return 0, err
 	}
 	return size + inc, nil
 }
 
-func (db *dataBlock) decrTotalSize(dec uint32) (uint32, error) {
-	size, err := db.totalSize()
+func (db *dataBlock) decrSize(dec uint32) (uint32, error) {
+	size, err := db.size()
 	if err != nil {
 		return 0, err
 	}
-	if err := db.updateTotalSize(size - dec); err != nil {
+	if err := db.updateSize(size - dec); err != nil {
 		return 0, err
 	}
 	return size - dec, nil
 }
 
-func (db *dataBlock) updateTotalSize(size uint32) error {
-	buf := &writeBuffer{buf: db.block[headerTotalSizeOffset : headerTotalSizeOffset+sizeOfUint32]}
+func (db *dataBlock) updateSize(size uint32) error {
+	buf := &writeBuffer{buf: db.block[dataSizeOffset : dataSizeOffset+sizeOfUint32]}
 	binary.Write(buf, binary.LittleEndian, size)
 	if buf.err != nil {
 		return stackerr.Newf("dataBlock: unable to update total size. Err: [%s]", buf.err.Error())
@@ -128,7 +128,7 @@ func (db *dataBlock) save(key string, data []byte) (dataOffset, error) {
 	if err := db.updateWriteOffset(offset + dataOffset(rec.size())); err != nil {
 		return 0, err
 	}
-	db.incrTotalSize(rec.size())
+	db.incrSize(rec.size())
 	return offset, nil
 }
 
@@ -144,6 +144,26 @@ func (db *dataBlock) fetch(start dataOffset, key string) ([]byte, bool, error) {
 
 	// record was not found.
 	return nil, false, nil
+}
+
+func (db *dataBlock) fetchAll(start dataOffset) (map[string][]byte, error) {
+	kv := make(map[string][]byte)
+	offset := start
+	rec, err := db.readRecordFrom(offset)
+	if err != nil {
+		return nil, err
+	}
+	for rec != nil {
+		kv[string(rec.key)] = rec.data
+		if rec.next == 0 {
+			break
+		}
+		rec, err = db.readRecordFrom(rec.next)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return kv, nil
 }
 
 func (db *dataBlock) readRecordFrom(start dataOffset) (*dataRecord, error) {
@@ -264,8 +284,8 @@ func (db *dataBlock) update(start dataOffset, key string, data []byte) (dataOffs
 		}
 
 		// update total size used.
-		db.incrTotalSize(rec.size())
-		db.decrTotalSize(recOldSize)
+		db.incrSize(rec.size())
+		db.decrSize(recOldSize)
 
 		// If there was no previous record, then this was the first record.
 		// It was moved because it didn't fit in it's previous offset. Return it's new offset.
@@ -308,7 +328,7 @@ func (db *dataBlock) delete(start dataOffset, key string) (dataOffset, error) {
 
 	// rec is at the start of the list.
 	if prevOffset == 0 {
-		db.decrTotalSize(rec.size())
+		db.decrSize(rec.size())
 		return rec.next, nil
 	}
 
@@ -324,7 +344,7 @@ func (db *dataBlock) delete(start dataOffset, key string) (dataOffset, error) {
 		return 0, err
 	}
 
-	db.decrTotalSize(rec.size())
+	db.decrSize(rec.size())
 	return start, nil
 }
 

@@ -20,8 +20,37 @@ type index interface {
 }
 
 type indexBlock struct {
-	count uint32 // current size of the index.
-	data  []byte // Index data block
+	size uint32 // current size of the index.
+	data []byte // Index data block
+}
+
+// offsets returns all the valid datablock offsets set in the index.
+func (i *indexBlock) getAll() ([]dataOffset, error) {
+	var ret []dataOffset
+	for idx := uint32(0); idx < i.size; idx++ {
+		offset, err := i.offset(idx)
+		if err != nil {
+			return nil, err
+		}
+		if offset != 0 {
+			ret = append(ret, offset)
+		}
+	}
+	return ret, nil
+}
+
+func (i *indexBlock) offset(idx uint32) (dataOffset, error) {
+	// These 4 bytes represent the pointer in data block.
+	ptrBytes := i.data[idx : idx+sizeOfUint32]
+
+	// Convert from bytes to data block pointer offset.
+	var offset dataOffset
+	buf := bytes.NewReader(ptrBytes)
+	err := binary.Read(buf, binary.LittleEndian, &offset)
+	if err != nil {
+		return 0, fmt.Errorf("error in reading index: %s", err)
+	}
+	return offset, nil
 }
 
 func (i *indexBlock) get(key string) (dataOffset, error) {
@@ -29,18 +58,8 @@ func (i *indexBlock) get(key string) (dataOffset, error) {
 	if err != nil {
 		return 0, err
 	}
-	index := (h % i.count) * sizeOfUint32
-	// These 4 bytes represent the pointer in data block.
-	ptrBytes := i.data[index:(index + sizeOfUint32)]
-
-	// Convert from bytes to data block pointer offset.
-	var offset dataOffset
-	buf := bytes.NewReader(ptrBytes)
-	err = binary.Read(buf, binary.LittleEndian, &offset)
-	if err != nil {
-		return 0, fmt.Errorf("error in reading index: %s", err)
-	}
-	return offset, nil
+	index := (h % i.size) * sizeOfUint32
+	return i.offset(index)
 }
 
 func (i *indexBlock) set(key string, offset dataOffset) error {
@@ -49,7 +68,7 @@ func (i *indexBlock) set(key string, offset dataOffset) error {
 	if err != nil {
 		return err
 	}
-	index := (h % i.count) * sizeOfUint32
+	index := (h % i.size) * sizeOfUint32
 	offsetBytes := i.data[index:(index + sizeOfUint32)]
 
 	// Conver the offset into little-endian byte ordering.

@@ -18,20 +18,20 @@ func TestSuccessfulGet(t *testing.T) {
 		expectedDataPtr dataOffset
 	}{
 		{ // Case-0: index block contains 0x11223344 at 0th index
-			indexBlk:        indexBlock{count: 4, data: []byte{0x44, 0x33, 0x22, 0x11}},
+			indexBlk:        indexBlock{size: 4, data: []byte{0x44, 0x33, 0x22, 0x11}},
 			mockedHashIndex: 0,
 			expectedDataPtr: 0x11223344,
 		},
 
 		{ // Case-1: index block contains 0x11223344 at 1st index
-			indexBlk:        indexBlock{count: 4, data: []byte{0x0, 0x0, 0x0, 0x0, 0x44, 0x33, 0x22, 0x11}},
+			indexBlk:        indexBlock{size: 4, data: []byte{0x0, 0x0, 0x0, 0x0, 0x44, 0x33, 0x22, 0x11}},
 			mockedHashIndex: 1,
 			expectedDataPtr: 0x11223344,
 		},
 		{ // Case-2: index block contains 0x44332211 at 100th index
 			indexBlk: indexBlock{
-				count: 110,
-				data:  append(make([]byte, sizeOfUint32*100), []byte{0x11, 0x22, 0x33, 0x44, 0x0, 0x0, 0x0, 0x0}...),
+				size: 110,
+				data: append(make([]byte, sizeOfUint32*100), []byte{0x11, 0x22, 0x33, 0x44, 0x0, 0x0, 0x0, 0x0}...),
 			},
 			mockedHashIndex: 100,
 			expectedDataPtr: 0x44332211,
@@ -99,8 +99,8 @@ func TestSuccessfulSet(t *testing.T) {
 
 		// setup an index block.
 		indexBlk := indexBlock{
-			count: tc.indexBlkCount,
-			data:  make([]byte, len(tc.expectedDataBytes)),
+			size: tc.indexBlkCount,
+			data: make([]byte, len(tc.expectedDataBytes)),
 		}
 
 		err := indexBlk.set("qwerty", tc.offset)
