@@ -40,6 +40,7 @@ func (i *indexBlock) getAll() ([]dataOffset, error) {
 }
 
 func (i *indexBlock) offset(idx uint32) (dataOffset, error) {
+	idx = idx * sizeOfUint32
 	// These 4 bytes represent the pointer in data block.
 	ptrBytes := i.data[idx : idx+sizeOfUint32]
 
@@ -58,8 +59,8 @@ func (i *indexBlock) get(key string) (dataOffset, error) {
 	if err != nil {
 		return 0, err
 	}
-	index := (h % i.size) * sizeOfUint32
-	return i.offset(index)
+	idx := (h % i.size)
+	return i.offset(idx)
 }
 
 func (i *indexBlock) set(key string, offset dataOffset) error {

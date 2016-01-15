@@ -327,3 +327,78 @@ func TestDyconfWriteInitNewFile(t *testing.T) {
 	ensure.Nil(t, err)
 	ensure.Nil(t, os.Remove(tmpFileName))
 }
+
+func setupTempFile(t *testing.T, prefix string) string {
+	tmpFile, err := ioutil.TempFile("", prefix)
+	ensure.Nil(t, err)
+	defer tmpFile.Close()
+	os.Remove(tmpFile.Name())
+
+	return tmpFile.Name()
+}
+
+func TestDyconfMap(t *testing.T) {
+	cases := []struct {
+		kv []struct {
+			key string
+			val []byte
+		}
+	}{
+		{ // Case-0: key1 is overwritten.
+			kv: []struct {
+				key string
+				val []byte
+			}{
+				{key: "key1", val: []byte("val1")},
+				{key: "key2", val: []byte("val2")},
+				{key: "key1", val: []byte("val1_1")},
+				{key: "key3", val: []byte("val3")},
+			},
+		},
+	}
+
+	// Test with normal hashing.
+	for i, tc := range cases {
+		tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfMap-case-%d-", i))
+		// Initialize the writer.
+		wc, err := NewManager(tmpFileName)
+		defer os.Remove(tmpFileName)
+		ensure.Nil(t, err)
+
+		expected := make(map[string][]byte)
+		for _, kv := range tc.kv {
+			ensure.Nil(t, wc.Set(kv.key, kv.val))
+			expected[kv.key] = kv.val
+		}
+		retMap, err := wc.Map()
+		ensure.Nil(t, err, fmt.Sprintf("Case-%d", i))
+		ensure.DeepEqual(t, retMap, expected, fmt.Sprintf("Case-%d", i))
+		ensure.Nil(t, wc.Close())
+	}
+
+	// Test with collisions.
+	savedHashfunc := defaultHashFunc
+	defaultHashFunc = func(key string) (uint32, error) {
+		return 20, nil // Everything falls into bucket-20
+	}
+	defer func() {
+		defaultHashFunc = savedHashfunc // restore
+	}()
+	for i, tc := range cases {
+		tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfMap-case-%d-", i))
+		// Initialize the writer.
+		wc, err := NewManager(tmpFileName)
+		defer os.Remove(tmpFileName)
+		ensure.Nil(t, err)
+
+		expected := make(map[string][]byte)
+		for _, kv := range tc.kv {
+			ensure.Nil(t, wc.Set(kv.key, kv.val))
+			expected[kv.key] = kv.val
+		}
+		retMap, err := wc.Map()
+		ensure.Nil(t, err, fmt.Sprintf("Case-%d", i))
+		ensure.DeepEqual(t, retMap, expected, fmt.Sprintf("Case-%d", i))
+		ensure.Nil(t, wc.Close())
+	}
+}

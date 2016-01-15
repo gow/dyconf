@@ -342,6 +342,12 @@ func (c *configManager) Set(key string, value []byte) error {
 }
 
 func (c *configManager) Map() (map[string][]byte, error) {
+	// read lock the file
+	if err := c.rlock(); err != nil {
+		return nil, err
+	}
+	defer c.unlock()
+
 	ret := make(map[string][]byte)
 	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
 	if err != nil {
