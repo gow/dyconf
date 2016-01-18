@@ -11,7 +11,7 @@ import (
 	"github.com/facebookgo/ensure"
 )
 
-func TestSuccessfulGet(t *testing.T) {
+func TestIndexSuccessfulGet(t *testing.T) {
 	cases := []struct {
 		indexBlk        indexBlock
 		mockedHashIndex uint32
@@ -50,20 +50,7 @@ func TestSuccessfulGet(t *testing.T) {
 	}
 }
 
-func TestGetErrors(t *testing.T) {
-	savedHashFunc := defaultHashFunc
-	indexBlk := indexBlock{}
-
-	// Fake an error in hashing
-	defaultHashFunc = func(s string) (uint32, error) {
-		return 0, fmt.Errorf("Fake hashing error")
-	}
-	_, err := indexBlk.get("hello")
-	ensure.Err(t, err, regexp.MustCompile("Fake hashing error"))
-	defaultHashFunc = savedHashFunc
-}
-
-func TestSuccessfulSet(t *testing.T) {
+func TestIndexSuccessfulSet(t *testing.T) {
 	cases := []struct {
 		indexBlkCount     uint32
 		mockedHashIndex   uint32
@@ -108,6 +95,48 @@ func TestSuccessfulSet(t *testing.T) {
 		ensure.DeepEqual(t, indexBlk.data, tc.expectedDataBytes, fmt.Sprintf("case: %d", i))
 		defaultHashFunc = savedHashFunc
 	}
+}
+
+// TestIndexReset tests the resetting of the index. After reset() all the index bytes should be 0x00
+func TestIndexReset(t *testing.T) {
+	cases := []struct {
+		indexBlk indexBlock
+	}{
+		{ // Case-0: index block contains 0x11223344 at 0th index
+			indexBlk: indexBlock{size: 1, data: []byte{0x44, 0x33, 0x22, 0x11}},
+		},
+
+		{ // Case-1: index block contains 0x11223344 at 1st index
+			indexBlk: indexBlock{size: 3, data: []byte{0x0, 0x0, 0x0, 0x0, 0x44, 0x33, 0x22, 0x11, 0x0, 0x0, 0x0, 0x0}},
+		},
+		{ // Case-2: index block contains 0x44332211 at 100th index
+			indexBlk: indexBlock{
+				size: 102,
+				data: append(make([]byte, sizeOfUint32*100), []byte{0x11, 0x22, 0x33, 0x44, 0x0, 0x0, 0x0, 0x0}...),
+			},
+		},
+	}
+
+	for i, tc := range cases {
+		err := tc.indexBlk.reset()
+		ensure.Nil(t, err, fmt.Sprintf("case: %d", i))
+		for j, b := range tc.indexBlk.data {
+			ensure.True(t, (b == 0x00), fmt.Sprintf("case: %d, data[%d]=%x", i, j, b))
+		}
+	}
+}
+
+func TestIndexGetErrors(t *testing.T) {
+	savedHashFunc := defaultHashFunc
+	indexBlk := indexBlock{}
+
+	// Fake an error in hashing
+	defaultHashFunc = func(s string) (uint32, error) {
+		return 0, fmt.Errorf("Fake hashing error")
+	}
+	_, err := indexBlk.get("hello")
+	ensure.Err(t, err, regexp.MustCompile("Fake hashing error"))
+	defaultHashFunc = savedHashFunc
 }
 
 /******************* Benchmarks ****************************/
