@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+
+	"github.com/facebookgo/stackerr"
 )
 
 const (
@@ -70,7 +72,7 @@ func (i *indexBlock) set(key string, offset dataOffset) error {
 		return err
 	}
 	index := (h % i.size) * sizeOfUint32
-	offsetBytes := i.data[index:(index + sizeOfUint32)]
+	offsetBytes := i.data[index : index+sizeOfUint32]
 
 	// Conver the offset into little-endian byte ordering.
 	buf := &bytes.Buffer{}
@@ -81,6 +83,18 @@ func (i *indexBlock) set(key string, offset dataOffset) error {
 
 	// save at offsetBytes
 	copy(offsetBytes, buf.Bytes())
+	return nil
+}
+
+func (i *indexBlock) reset() error {
+	zeroBytes := make([]byte, sizeOfUint32)
+	for idx := uint32(0); idx < i.size; idx++ {
+		offset := idx * sizeOfUint32
+		offsetBytes := i.data[offset : offset+sizeOfUint32]
+		if copy(offsetBytes, zeroBytes) != sizeOfUint32 {
+			return stackerr.Newf("Error while resetting index block")
+		}
+	}
 	return nil
 }
 

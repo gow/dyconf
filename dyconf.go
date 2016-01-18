@@ -18,6 +18,7 @@ type ConfigManager interface {
 	Set(key string, value []byte) error
 	Delete(key string) error
 	Map() (map[string][]byte, error)
+	Defrag() error
 	Close() error
 }
 
@@ -295,7 +296,12 @@ func (c *configManager) Set(key string, value []byte) error {
 		return err
 	}
 	defer c.unlock()
+	return c.setNoLock(key, value)
+}
 
+// setNoLock is a helper method to set the key-value in the config. It does so without locking the file.
+// So, it should always be used in a method that locks the file.
+func (c *configManager) setNoLock(key string, value []byte) error {
 	var err error
 	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
 	if err != nil {
@@ -375,6 +381,46 @@ func (c *configManager) Map() (map[string][]byte, error) {
 		}
 	}
 	return ret, nil
+}
+
+func (c *configManager) Defrag() error {
+	// Save the current values. Don't lock before calling Map() since it also takes a read lock.
+	kvMap, err := c.Map()
+	if err != nil {
+		return err
+	}
+
+	// now write lock the file
+	if err := c.wlock(); err != nil {
+		return err
+	}
+	defer c.unlock()
+
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return err
+	}
+
+	index := &indexBlock{
+		size: defaultIndexCount,
+		data: c.block[h.indexBlockOffset : uint32(h.indexBlockOffset)+h.indexBlockSize],
+	}
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+
+	// Reset the index and the data block.
+	if err := index.reset(); err != nil {
+		return err
+	}
+	if err := db.reset(); err != nil {
+		return err
+	}
+
+	for k, v := range kvMap {
+		if err := c.Set(k, v); err != nil {
+			return stackerr.Wrap(err)
+		}
+	}
+	return nil
 }
 
 func (c *config) rlock() error {
