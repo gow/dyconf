@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	dataBlockHeaderSize = uint32(0x10)
+	dataBlockHeaderSize = uint32(0x10)       // 16 bytes
 	maxKeySize          = uint32(0x01 << 16) // 65 KB
 	maxDataSize         = uint32(0x01 << 27) // 128 MB
 
-	headerWriteOffset = 0x00 // write offset is saved here.
-	dataSizeOffset    = 0x04 // total used size is saved here.
+	dataWriteOffset = 0x00 // write offset is saved here.
+	dataSizeOffset  = 0x04 // total used size is saved here.
 )
 
 type dataStore interface {
@@ -39,7 +39,7 @@ func (db *dataBlock) reset() error {
 
 func (db *dataBlock) updateWriteOffset(offset dataOffset) error {
 	// First 4 bytes of the header is reserved for write offset.
-	buf := &writeBuffer{buf: db.block[headerWriteOffset : headerWriteOffset+sizeOfUint32]}
+	buf := &writeBuffer{buf: db.block[dataWriteOffset : dataWriteOffset+sizeOfUint32]}
 	binary.Write(buf, binary.LittleEndian, offset)
 	if buf.err != nil {
 		return stackerr.Newf("dataBlock: unable to update write offset. Err: [%s]", buf.err.Error())
@@ -69,6 +69,16 @@ func (db *dataBlock) size() (uint32, error) {
 		return 0, stackerr.Newf("dataBlock: unable to fetch total size. Err: [%s]", err.Error())
 	}
 	return size, nil
+}
+
+// freeByteCount returns the number of bytes available for writing in the data block.
+// This is simply the difference between the data block length and the current write offset.
+func (db *dataBlock) freeByteCount() (uint32, error) {
+	writeOffset, err := db.getWriteOffset()
+	if err != nil {
+		return 0, stackerr.Wrap(err)
+	}
+	return uint32(len(db.block)) - uint32(writeOffset), nil
 }
 
 func (db *dataBlock) incrSize(inc uint32) (uint32, error) {
@@ -231,7 +241,8 @@ func (db *dataBlock) find(start dataOffset, key string) (*dataRecord, dataOffset
 			return rec, offset, prevOffset, nil
 		}
 	}
-	// The data record was not found. This is not an error. Return just a vald previous offset (the last record). This is so that the caller can take additional action when the record was not found.
+	// The data record was not found. This is not an error. Return just a vald previous offset (the last record).
+	// This is so that the caller can take additional action when the record was not found.
 	prevOffset := offset
 	return nil, 0, prevOffset, nil
 }

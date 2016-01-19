@@ -20,6 +20,10 @@ type ConfigManager interface {
 	Map() (map[string][]byte, error)
 	Defrag() error
 	Close() error
+
+	// unexported
+	freeDataByteCount() (uint32, error)
+	dataBlockSize() (uint32, error)
 }
 
 type config struct {
@@ -421,6 +425,38 @@ func (c *configManager) Defrag() error {
 		}
 	}
 	return nil
+}
+
+func (c *configManager) freeDataByteCount() (uint32, error) {
+	// read lock the file
+	if err := c.rlock(); err != nil {
+		return 0, err
+	}
+	defer c.unlock()
+
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return 0, err
+	}
+
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+	return db.freeByteCount()
+}
+
+func (c *configManager) dataBlockSize() (uint32, error) {
+	// read lock the file
+	if err := c.rlock(); err != nil {
+		return 0, err
+	}
+	defer c.unlock()
+
+	h, err := (&headerBlock{}).read(c.block[0:headerBlockSize])
+	if err != nil {
+		return 0, err
+	}
+
+	db := &dataBlock{block: c.block[h.dataBlockOffset : uint32(h.dataBlockOffset)+h.dataBlockSize]}
+	return db.size()
 }
 
 func (c *config) rlock() error {

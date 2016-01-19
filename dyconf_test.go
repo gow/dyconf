@@ -24,11 +24,9 @@ func TestDyconfSetGetClose(t *testing.T) {
 	}
 
 	for i, tc := range cases {
-		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("TestDyconfSetGetClose-Case-%d", i))
-		ensure.Nil(t, err, fmt.Sprintf("Case: [%d]", i))
-		tmpFileName := tmpFile.Name()
-		tmpFile.Close()
-		os.Remove(tmpFileName)
+		// Setup
+		tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfSetGetClose-Case%d-", i))
+		defer os.Remove(tmpFileName)
 
 		// Set the keys.
 		wc, err := NewManager(tmpFileName)
@@ -74,11 +72,9 @@ func TestDyconfOverwrite(t *testing.T) {
 		"some other key": []byte("some other value"),
 	}
 
-	tmpFile, err := ioutil.TempFile("", "TestDyconfOverwrite")
-	ensure.Nil(t, err)
-	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
-	os.Remove(tmpFileName)
+	// Setup
+	tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfOverwrite-"))
+	defer os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewManager(tmpFileName)
@@ -124,11 +120,8 @@ func TestDyconfCollisions(t *testing.T) {
 	}
 
 	// Setup
-	tmpFile, err := ioutil.TempFile("", "TestDyconfCollisions")
-	ensure.Nil(t, err)
-	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
-	os.Remove(tmpFileName)
+	tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfCollisions-"))
+	defer os.Remove(tmpFileName)
 
 	// replace hashing function.
 	savedHashfunc := defaultHashFunc
@@ -185,11 +178,8 @@ func TestDyconfDelete(t *testing.T) {
 	}
 
 	// Setup
-	tmpFile, err := ioutil.TempFile("", "TestDyconfDelete")
-	ensure.Nil(t, err)
-	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
-	os.Remove(tmpFileName)
+	tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfDelete-"))
+	defer os.Remove(tmpFileName)
 
 	// Set the keys in the given sequence.
 	wc, err := NewManager(tmpFileName)
@@ -250,11 +240,8 @@ func TestDyconfDeleteWithCollisions(t *testing.T) {
 	}
 
 	// Setup
-	tmpFile, err := ioutil.TempFile("", "TestDyconfDeleteWithCollisions")
-	ensure.Nil(t, err)
-	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
-	os.Remove(tmpFileName)
+	tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfDeleteWithCollisions-"))
+	defer os.Remove(tmpFileName)
 
 	// replace hashing function.
 	savedHashfunc := defaultHashFunc
@@ -401,4 +388,48 @@ func TestDyconfMap(t *testing.T) {
 		ensure.DeepEqual(t, retMap, expected, fmt.Sprintf("Case-%d", i))
 		ensure.Nil(t, wc.Close())
 	}
+}
+
+func TestDyconfDefrag(t *testing.T) {
+	kvPairs := []struct {
+		key string
+		val []byte
+	}{
+		// overwrite the same key with different data size causing fragmentation.
+		{key: "key", val: []byte("val1")},
+		{key: "key", val: []byte("val22")},
+		{key: "key", val: []byte("val333")},
+		{key: "key", val: []byte("val4444")},
+	}
+	expectedUsedByteCount := (&dataRecord{key: []byte("key"), data: []byte("val4444")}).size()
+
+	// Initialize the writer.
+	tmpFileName := setupTempFile(t, fmt.Sprintf("TestDyconfDefrag-"))
+	m, err := NewManager(tmpFileName)
+	defer os.Remove(tmpFileName)
+	ensure.Nil(t, err)
+
+	for _, kv := range kvPairs {
+		ensure.Nil(t, m.Set(kv.key, kv.val))
+	}
+	// save previous free byte count
+	prevFreeBytes, err := m.freeDataByteCount()
+	ensure.Nil(t, err)
+
+	// defrag
+	ensure.Nil(t, m.Defrag())
+
+	// new free byte count
+	newFreeBytes, err := m.freeDataByteCount()
+	ensure.Nil(t, err)
+
+	// new free byte count must be greater than previous one.
+	ensure.True(t, newFreeBytes > prevFreeBytes)
+
+	// Also verify the size of the data block.
+	usedByteCount, err := m.dataBlockSize()
+	ensure.Nil(t, err)
+	ensure.DeepEqual(t, usedByteCount, expectedUsedByteCount)
+
+	ensure.Nil(t, m.Close())
 }
