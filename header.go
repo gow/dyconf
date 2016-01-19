@@ -65,7 +65,7 @@ func (h *headerBlock) read(block []byte) (*headerBlock, error) {
 		return nil, stackerr.Newf("headerBlock: failed to read the index block size. error: [%s]", err.Error())
 	}
 	if h.indexBlockSize > maxIndexBlockSize {
-		return nil, stackerr.Newf("headerBlock: invalid index block size [%#v]. It should not exceed [%#v]", h.indexBlockSize, maxIndexBlockSize)
+		return nil, stackerr.Newf("headerBlock: invalid index block size [%#X]. It should not exceed [%#X]", h.indexBlockSize, maxIndexBlockSize)
 	}
 
 	if err := binary.Read(buf, binary.LittleEndian, &h.dataBlockOffset); err != nil {
@@ -75,7 +75,7 @@ func (h *headerBlock) read(block []byte) (*headerBlock, error) {
 		return nil, stackerr.Newf("headerBlock: failed to read the data block size. error: [%s]", err.Error())
 	}
 	if h.dataBlockSize > maxDataBlockSize {
-		return nil, stackerr.Newf("headerBlock: invalid data block size [%#v]. It should not exceed [%#v]", h.dataBlockSize, maxDataBlockSize)
+		return nil, stackerr.Newf("headerBlock: invalid data block size [%#X]. It should not exceed [%#X]", h.dataBlockSize, maxDataBlockSize)
 	}
 	return h, nil
 }
