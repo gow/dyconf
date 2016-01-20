@@ -43,6 +43,7 @@ func TestHeaderRead(t *testing.T) {
 	}
 }
 
+// TestHeaderReadErrors tests for errors while reading the header.
 func TestHeaderReadErrors(t *testing.T) {
 	cases := []struct {
 		inputBlock     []byte
@@ -78,4 +79,12 @@ func TestHeaderReadErrors(t *testing.T) {
 		_, err := (&headerBlock{}).read(tc.inputBlock)
 		ensure.Err(t, err, regexp.MustCompile(tc.expectedErrStr), fmt.Sprintf("TestHeaderRead-Case%d-", i))
 	}
+}
+
+// TestHeaderSaveErrors tests errors while saving the header.
+func TestHeaderSaveErrors(t *testing.T) {
+	buf := make([]byte, headerBlockSize-1)
+	hdr := &headerBlock{block: buf}
+	err := hdr.save()
+	ensure.Err(t, err, regexp.MustCompile(`headerBlock: failed to save the header. It should be \[\d+\] bytes.`))
 }

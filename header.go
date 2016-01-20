@@ -83,8 +83,9 @@ func (h *headerBlock) read(block []byte) (*headerBlock, error) {
 func (h *headerBlock) save() error {
 	if len(h.block) < headerBlockSize {
 		return stackerr.Newf(
-			"headerBlock: failed to save the header. It should be [%#v] bytes. Given block: \n%s\n",
+			"headerBlock: failed to save the header. It should be [%#v] bytes. Given block (%d bytes): \n%s\n",
 			headerBlockSize,
+			len(h.block),
 			spew.Sdump(h.block),
 		)
 	}
