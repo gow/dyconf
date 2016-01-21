@@ -298,10 +298,7 @@ func TestDyconfInitErrors(t *testing.T) {
 
 func TestDyconfWriteInitNewFile(t *testing.T) {
 	// Create the file first.
-	tmpFile, err := ioutil.TempFile("", "TestDyconfWriteInitNewFile")
-	ensure.Nil(t, err)
-	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
+	tmpFileName := setupTempFile(t, "TestDyconfWriteInitNewFile-")
 	os.Remove(tmpFileName)
 
 	// Initialize the writer.
@@ -313,6 +310,26 @@ func TestDyconfWriteInitNewFile(t *testing.T) {
 	_, err = os.Stat(tmpFileName)
 	ensure.Nil(t, err)
 	ensure.Nil(t, os.Remove(tmpFileName))
+}
+
+// TestDyconfWriteInitExistingFile tests the initialization of existing config file for writing.
+func TestDyconfWriteInitExistingFile(t *testing.T) {
+	// Create the file first.
+	tmpFileName := setupTempFile(t, "TestDyconfWriteInitExistingFile-")
+	os.Remove(tmpFileName)
+
+	// Initialize the writer and create a new config file.
+	m, err := NewManager(tmpFileName)
+	ensure.Nil(t, err)
+	ensure.Nil(t, m.Close())
+	// Make sure the file is created.
+	_, err = os.Stat(tmpFileName)
+	ensure.Nil(t, err)
+
+	// Initialize the writer with the existing config file.
+	m, err = NewManager(tmpFileName)
+	ensure.Nil(t, err)
+	ensure.Nil(t, m.Close())
 }
 
 func setupTempFile(t *testing.T, prefix string) string {

@@ -142,7 +142,7 @@ func (c *configManager) create_new(fileName string) error {
 
 	// We now seek to the end of the file and write an empty byte. This is to bloat the file upto the
 	// size we expect to mmap. If we don't do this mmap fails with the error "unexpected fault address"
-	seekOffset, err := c.file.Seek(int64(defaultTotalSize), 0)
+	seekOffset, err := c.file.Seek(int64(defaultTotalSize-1), 0)
 	if err != nil {
 		return stackerr.Newf(
 			"dyconf: failed to initialize for writing. Unexpected error occured while seeking to the "+
@@ -152,7 +152,7 @@ func (c *configManager) create_new(fileName string) error {
 			err.Error(),
 		)
 	}
-	if seekOffset != defaultTotalSize {
+	if seekOffset != defaultTotalSize-1 {
 		return stackerr.Newf(
 			"dyconf: failed to initialize for writing. Could not seek the file [%s] till the "+
 				"required number of bytes [%#v]. Current seek offset: [%#v]",
