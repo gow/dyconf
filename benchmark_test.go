@@ -45,29 +45,56 @@ func BenchmarkDyconfGet(b *testing.B) {
 	tmpFile.Close()
 	os.Remove(tmpFileName)
 
-	// Set the keys in the given sequence.
+	// Set the keys first.
 	wc, err := NewManager(tmpFileName)
 	ensure.Nil(b, err)
-
-	conf, err := New(tmpFileName)
-	ensure.Nil(b, err)
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
 		key := fmt.Sprintf("key-%d", i)
 		val := fmt.Sprintf("value-%d", i)
 		err = wc.Set(key, []byte(val))
 		if err != nil {
 			break
 		}
+	}
+	ensure.Nil(b, err)
 
-		b.StartTimer()
+	// Now reset the timer and start reading the keys.
+	conf, err := New(tmpFileName)
+	ensure.Nil(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key-%d", i)
 		_, err = conf.Get(key)
 		if err != nil {
 			break
 		}
 	}
 	ensure.Nil(b, err)
+}
+
+func BenchmarkSimpleMapGet(b *testing.B) {
+	kvMap := make(map[string]string)
+	// Set the keys first.
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		val := fmt.Sprintf("value-%d", i)
+		kvMap[key] = val
+	}
+
+	// Now reset the timer and start reading the keys.
+	b.ResetTimer()
+	m := sync.Mutex{}
+	ok := true
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		m.Lock()
+		_, ok = kvMap[key]
+		m.Unlock()
+		if !ok {
+			break
+		}
+	}
+	ensure.True(b, ok)
 }
 
 /***************** Flock ********************/
