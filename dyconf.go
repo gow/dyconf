@@ -140,7 +140,7 @@ func (c *configManager) create_new(fileName string) error {
 	}
 	defer c.unlock()
 
-	// We now seek to the end of the file and write an empty byte. This is to bloat the file upto the
+	// We now seek to the end of the file and write an empty byte. This is to bloat the file up to the
 	// size we expect to mmap. If we don't do this mmap fails with the error "unexpected fault address"
 	seekOffset, err := c.file.Seek(int64(defaultTotalSize-1), 0)
 	if err != nil {

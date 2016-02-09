@@ -227,7 +227,7 @@ func TestDataBlockUpdates(t *testing.T) {
 				},
 			),
 		},
-		{ // Case-1: Key is at the head of the list and the new data size is diferent from previous one.
+		{ // Case-1: Key is at the head of the list and the new data size is different from previous one.
 			db: &dataBlock{
 				block: concatBytes(
 					headerBytes(0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00), // write offset (0x20), total size (0x10)
@@ -260,7 +260,7 @@ func TestDataBlockUpdates(t *testing.T) {
 				},
 			),
 		},
-		{ // Case-2: Key is at the middle of the list and the new data size is diferent from previous one.
+		{ // Case-2: Key is at the middle of the list and the new data size is different from previous one.
 			db: &dataBlock{
 				block: concatBytes(
 					headerBytes(0x30, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00), // write offset (0x30), total size (0x20)
@@ -425,7 +425,7 @@ func TestDataBlockUpdateErrors(t *testing.T) {
 	}
 }
 
-// TestDataBlockSave tests succesful saving of key value pairs in a given data block.
+// TestDataBlockSave tests successful saving of key value pairs in a given data block.
 func TestDataBlockSave(t *testing.T) {
 	cases := []struct {
 		kvPairs       map[string][]byte
@@ -537,7 +537,7 @@ func TestDataBlockSaveErrors(t *testing.T) {
 	}
 }
 
-// TestDataRecordWrite tests succesfull writes into the given valid block.
+// TestDataRecordWrite tests successfull writes into the given valid block.
 func TestDataRecordWrite(t *testing.T) {
 	cases := []struct {
 		rec      *dataRecord
@@ -576,7 +576,7 @@ func TestDataRecordWriteErrors(t *testing.T) {
 	ensure.Err(t, err, regexp.MustCompile("Unable to write the key [TEST]*"))
 }
 
-// TestDataRecordRead tests succesfull reads into a dataRecord.
+// TestDataRecordRead tests successfull reads into a dataRecord.
 func TestDataRecordRead(t *testing.T) {
 	cases := []struct {
 		block       []byte
