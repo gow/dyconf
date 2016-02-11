@@ -499,7 +499,7 @@ func TestDataBlockSaveErrors(t *testing.T) {
 		},
 		{ // Case-1: empty values.
 			keys:           []string{"key"},
-			values:         [][]byte{[]byte{}},
+			values:         [][]byte{{}},
 			blockSize:      320,
 			expectedErrStr: `^dataBlock: save failed. key \[key\] and data \[\] must be non-zero length*`,
 		},

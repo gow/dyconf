@@ -9,11 +9,13 @@ import (
 	"github.com/facebookgo/stackerr"
 )
 
+// Config provides methods to access the config values.
 type Config interface {
 	Get(key string) ([]byte, error)
 	Close() error
 }
 
+// ConfigManager provides methods to manage the config data.
 type ConfigManager interface {
 	Set(key string, value []byte) error
 	Delete(key string) error
@@ -33,6 +35,7 @@ type config struct {
 	initOnce sync.Once
 }
 
+// New initializes and returns a new config that can be used to get the config values.
 func New(fileName string) (Config, error) {
 	c := &config{}
 	err := c.init(fileName)
@@ -46,9 +49,10 @@ type configManager struct {
 	config
 }
 
+// NewManager initializes and returns a new ConfigManager that can be used to manage the config data.
 func NewManager(fileName string) (ConfigManager, error) {
 	w := &configManager{}
-	err := w.write_init(fileName)
+	err := w.writeInit(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +129,7 @@ func (c *config) getBytes(key string) ([]byte, error) {
 	return data, nil
 }
 
-func (c *configManager) create_new(fileName string) error {
+func (c *configManager) createNew(fileName string) error {
 	c.fileName = fileName
 	var err error
 
@@ -200,14 +204,14 @@ func (c *configManager) create_new(fileName string) error {
 	return nil
 }
 
-func (c *configManager) write_init(fileName string) error {
+func (c *configManager) writeInit(fileName string) error {
 	c.fileName = fileName
 	var err error
 	var existingFileSize int64
 
 	stat, err := os.Stat(fileName)
 	if os.IsNotExist(err) {
-		return c.create_new(fileName)
+		return c.createNew(fileName)
 	}
 
 	c.file, err = os.OpenFile(fileName, os.O_RDWR, 0777)
