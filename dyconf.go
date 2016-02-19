@@ -17,6 +17,7 @@ type Config interface {
 
 // ConfigManager provides methods to manage the config data.
 type ConfigManager interface {
+	Get(key string) ([]byte, error)
 	Set(key string, value []byte) error
 	Delete(key string) error
 	Map() (map[string][]byte, error)
